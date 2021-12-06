@@ -1,21 +1,22 @@
-// @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
 const lightCodeTheme = require('prism-react-renderer/themes/github');
 const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 
 /** @type {import('@docusaurus/types').Config} */
+
+// TODO Please change your repo name.
+const repoName = 'repoName';
+
 const config = {
-  title: 'My Site',
-  tagline: 'Dinosaurs are cool',
-  url: 'https://your-docusaurus-test-site.com',
-  baseUrl: '/',
+  title: 'My Book',
+  tagline: 'detail',
+  url: 'https://your-site.com',
+  baseUrl: `/${repoName}`,
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
   favicon: 'img/favicon.ico',
-  organizationName: 'facebook', // Usually your GitHub org/user name.
-  projectName: 'docusaurus', // Usually your repo name.
-
+  organizationName: 'dev-in-book',
   presets: [
     [
       '@docusaurus/preset-classic',
@@ -24,13 +25,12 @@ const config = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
-          editUrl: 'https://github.com/facebook/docusaurus/edit/main/website/',
+          editUrl: `https://github.dev/dev-in-book/${repoName}/blob/main`,
         },
         blog: {
           showReadingTime: true,
           // Please change this to your repo.
-          editUrl:
-            'https://github.com/facebook/docusaurus/edit/main/website/blog/',
+          editUrl: `https://github.dev/dev-in-book/${repoName}`,
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
@@ -43,22 +43,22 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
-        title: 'My Site',
+        title: 'My Book Nav Title',
         logo: {
-          alt: 'My Site Logo',
-          src: 'img/logo.svg',
+          alt: 'dev-in-book',
+          src: 'img/scope_logo_765.png',
         },
         items: [
           {
             type: 'doc',
-            docId: 'intro',
+            docId: 'chapter_1',
             position: 'left',
-            label: 'Tutorial',
+            label: '📕 detail',
           },
-          {to: '/blog', label: 'Blog', position: 'left'},
+          { to: '/blog', label: '👨‍👩‍👧‍👦 참여자', position: 'left' },
           {
-            href: 'https://github.com/facebook/docusaurus',
-            label: 'GitHub',
+            href: `https://github.dev/dev-in-book/${repoName}`,
+            label: '⛳️ GitHub',
             position: 'right',
           },
         ],
@@ -70,43 +70,21 @@ const config = {
             title: 'Docs',
             items: [
               {
-                label: 'Tutorial',
-                to: '/docs/intro',
-              },
-            ],
-          },
-          {
-            title: 'Community',
-            items: [
-              {
-                label: 'Stack Overflow',
-                href: 'https://stackoverflow.com/questions/tagged/docusaurus',
+                label: 'BookName',
+                to: '/docs/chapter_1',
               },
               {
-                label: 'Discord',
-                href: 'https://discordapp.com/invite/docusaurus',
-              },
-              {
-                label: 'Twitter',
-                href: 'https://twitter.com/docusaurus',
-              },
-            ],
-          },
-          {
-            title: 'More',
-            items: [
-              {
-                label: 'Blog',
-                to: '/blog',
+                label: 'Member',
+                href: '/blog/member',
               },
               {
                 label: 'GitHub',
-                href: 'https://github.com/facebook/docusaurus',
+                href: `https://github.dev/dev-in-book/${repoName}`,
               },
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} Dev in Book, Built with Docusaurus.`,
       },
       prism: {
         theme: lightCodeTheme,
