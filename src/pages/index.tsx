@@ -28,7 +28,7 @@ function HomepageHeader() {
 export default function Home(): JSX.Element {
   const { siteConfig } = useDocusaurusContext();
   return (
-    <Layout title={siteConfig.title} description='클린코드 읽기'>
+    <Layout title={siteConfig.title} description='리팩터링 읽기'>
       <HomepageHeader />
       <main>
         <HomepageFeatures />

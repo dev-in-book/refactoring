@@ -8,27 +8,27 @@ const AUTHORS = {
     url: 'https://github.com/positiveko',
     image_url: 'https://github.com/positiveko.png',
   },
-  Xednicoder: {
-    name: 'Xednicoder',
+  saengmotmi: {
+    name: 'saengmotmi',
     title: 'Front End Engineer',
-    url: 'https://github.com/Xednicoder',
-    image_url: 'https://github.com/Xednicoder.png',
+    url: 'https://github.com/saengmotmi',
+    image_url: 'https://github.com/saengmotmi.png',
   },
-  'gyuseok-dev': {
-    name: 'gyuseok-dev',
+  'Woongjo-Yoo': {
+    name: 'Woongjo-Yoo',
     title: 'Back End Engineer',
-    url: 'https://github.com/gyuseok-dev',
-    image_url: 'https://github.com/gyuseok-dev.png',
+    url: 'https://github.com/onikss793',
+    image_url: 'https://github.com/onikss793.png',
   },
-  shinyeong: {
-    name: 'shinyeong',
+  Mengkki: {
+    name: 'Mengkki',
     title: 'Front End Engineer',
-    url: 'https://github.com/bonbon0202',
-    image_url: 'https://github.com/bonbon0202.png',
+    url: 'https://github.com/guswnl0610',
+    image_url: 'https://github.com/guswnl0610.png',
   },
 };
 
-type TAuthor = 'positiveko' | 'Xednicoder' | 'gyuseok-dev' | 'shinyeong';
+type TAuthor = 'positiveko' | 'saengmotmi' | 'Woongjo-Yoo' | 'Mengkki';
 
 interface IAuthors {
   bookLeader: TAuthor;
@@ -69,11 +69,12 @@ export default function Authors({
     return (
       <div className={styles.authors}>
         {AUTHORS[bookLeader] && <Author author={bookLeader} />}
-        {authors && authors.map((author) => {
-          if (AUTHORS[author]) {
-            return <Author author={author} key={author} />;
-          }
-        })}
+        {authors &&
+          authors.map((author) => {
+            if (AUTHORS[author]) {
+              return <Author author={author} key={author} />;
+            }
+          })}
       </div>
     );
   }, [bookLeader, authors]);
