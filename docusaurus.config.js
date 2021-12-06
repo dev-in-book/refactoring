@@ -1,96 +1,88 @@
-// Note: type annotations allow type checking and IDEs autocompletion
-
 const lightCodeTheme = require('prism-react-renderer/themes/github');
 const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 
-/** @type {import('@docusaurus/types').Config} */
+// With JSDoc @type annotations, IDEs can provide config autocompletion
+/** @type {import('@docusaurus/types').DocusaurusConfig} */
+(
+  module.exports = {
+    title: 'Clean Code',
+    tagline: '클린코드 완독하기 프로젝트',
+    url: 'https://..com',
+    baseUrl: '/',
+    onBrokenLinks: 'throw',
+    onBrokenMarkdownLinks: 'warn',
+    favicon: 'img/favicon.ico',
+    organizationName: 'scope', // Usually your GitHub org/user name.
+    projectName: 'cleancode', // Usually your repo name.
 
-// TODO Please change your repo name.
-const repoName = 'repoName';
+    presets: [
+      [
+        '@docusaurus/preset-classic',
+        /** @type {import('@docusaurus/preset-classic').Options} */
+        ({
+          docs: {
+            sidebarPath: require.resolve('./sidebars.js'),
+            editUrl: 'https://github.com/scope-team/clean-code',
+          },
+          blog: {
+            showReadingTime: true,
+            editUrl: 'https://github.com/scope-team/clean-code',
+          },
+        }),
+      ],
+    ],
 
-const config = {
-  title: 'My Book',
-  tagline: 'detail',
-  url: 'https://your-site.com',
-  baseUrl: `/${repoName}`,
-  onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
-  favicon: 'img/favicon.ico',
-  organizationName: 'dev-in-book',
-  presets: [
-    [
-      '@docusaurus/preset-classic',
-      /** @type {import('@docusaurus/preset-classic').Options} */
+    themeConfig:
+      /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
       ({
-        docs: {
-          sidebarPath: require.resolve('./sidebars.js'),
-          // Please change this to your repo.
-          editUrl: `https://github.dev/dev-in-book/${repoName}/blob/main`,
+        navbar: {
+          title: '클린코드',
+          logo: {
+            alt: 'scope',
+            src: 'img/scope_logo_765.png',
+          },
+          items: [
+            {
+              type: 'doc',
+              docId: 'chapter_1',
+              position: 'left',
+              label: '📕 클린코드 완독하기 프로젝트',
+            },
+            { to: '/blog', label: '👨‍👩‍👧‍👦 참여자', position: 'left' },
+            {
+              href: 'https://github.com/scope-team/clean-code',
+              label: '⛳️ GitHub',
+              position: 'right',
+            },
+          ],
         },
-        blog: {
-          showReadingTime: true,
-          // Please change this to your repo.
-          editUrl: `https://github.dev/dev-in-book/${repoName}`,
+        footer: {
+          style: 'dark',
+          links: [
+            {
+              title: 'Docs',
+              items: [
+                {
+                  label: 'CleanCode',
+                  to: '/docs/chapter_1',
+                },
+                {
+                  label: 'Member',
+                  href: '/blog/member',
+                },
+                {
+                  label: 'GitHub',
+                  href: 'https://github.com/scope-team/clean-code',
+                },
+              ],
+            },
+          ],
+          copyright: `Copyright © ${new Date().getFullYear()} Scope, Built with Docusaurus.`,
         },
-        theme: {
-          customCss: require.resolve('./src/css/custom.css'),
+        prism: {
+          theme: lightCodeTheme,
+          darkTheme: darkCodeTheme,
         },
       }),
-    ],
-  ],
-
-  themeConfig:
-    /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
-    ({
-      navbar: {
-        title: 'My Book Nav Title',
-        logo: {
-          alt: 'dev-in-book',
-          src: 'img/scope_logo_765.png',
-        },
-        items: [
-          {
-            type: 'doc',
-            docId: 'chapter_1',
-            position: 'left',
-            label: '📕 detail',
-          },
-          { to: '/blog', label: '👨‍👩‍👧‍👦 참여자', position: 'left' },
-          {
-            href: `https://github.dev/dev-in-book/${repoName}`,
-            label: '⛳️ GitHub',
-            position: 'right',
-          },
-        ],
-      },
-      footer: {
-        style: 'dark',
-        links: [
-          {
-            title: 'Docs',
-            items: [
-              {
-                label: 'BookName',
-                to: '/docs/chapter_1',
-              },
-              {
-                label: 'Member',
-                href: '/blog/member',
-              },
-              {
-                label: 'GitHub',
-                href: `https://github.dev/dev-in-book/${repoName}`,
-              },
-            ],
-          },
-        ],
-        copyright: `Copyright © ${new Date().getFullYear()} Dev in Book, Built with Docusaurus.`,
-      },
-      prism: {
-        theme: lightCodeTheme,
-        darkTheme: darkCodeTheme,
-      },
-    }),
-};
-
-module.exports = config;
+  }
+);

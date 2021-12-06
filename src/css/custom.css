@@ -25,4 +25,6 @@
 
 html[data-theme='dark'] .docusaurus-highlight-code-line {
   background-color: rgba(0, 0, 0, 0.3);
+  --ifm-color-primary: #4e68af;
+  --ifm-color-primary-dark: #5a91ea;
 }
