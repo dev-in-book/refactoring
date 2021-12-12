@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkrefactoring=self.webpackChunkrefactoring||[]).push([[535],{5641:function(e){e.exports=JSON.parse('{"title":"Recent posts","items":[{"title":"Member","permalink":"/refactoring/blog/member"},{"title":"MDX Blog Post \uc791\uc131\ud558\uae30","permalink":"/refactoring/blog/mdx-blog-post"}]}')}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkrefactoring=self.webpackChunkrefactoring||[]).push([[634],{2772:function(e){e.exports=JSON.parse('{"allTagsPath":"/refactoring/blog/tags","slug":"/refactoring/blog/tags/member","name":"member","count":1,"permalink":"/refactoring/blog/tags/member"}')}}]);

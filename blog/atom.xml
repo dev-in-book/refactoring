@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://dev-in-book.github.io/refactoring/blog</id>
+    <title>Refactoring 2.0 Blog</title>
+    <updated>2021-12-07T00:00:00.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://dev-in-book.github.io/refactoring/blog"/>
+    <subtitle>Refactoring 2.0 Blog</subtitle>
+    <icon>https://dev-in-book.github.io/refactoring/img/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Member]]></title>
+        <id>member</id>
+        <link href="https://dev-in-book.github.io/refactoring/blog/member"/>
+        <updated>2021-12-07T00:00:00.000Z</updated>
+        <author>
+            <name>Positiveko</name>
+            <uri>https://github.com/positiveko</uri>
+        </author>
+        <author>
+            <name>saengmotmi</name>
+            <uri>https://github.com/saengmotmi</uri>
+        </author>
+        <author>
+            <name>Woongjo-Yoo</name>
+            <uri>https://github.com/onikss793</uri>
+        </author>
+        <author>
+            <name>Mengkki</name>
+            <uri>https://github.com/guswnl0610</uri>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[MDX Blog Post 작성하기]]></title>
+        <id>mdx-blog-post</id>
+        <link href="https://dev-in-book.github.io/refactoring/blog/mdx-blog-post"/>
+        <updated>2021-12-06T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Blog posts support Docusaurus Markdown features, such as MDX.]]></summary>
+        <author>
+            <name>Positiveko</name>
+            <uri>https://github.com/positiveko</uri>
+        </author>
+    </entry>
+</feed>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+    <channel>
+        <title>Refactoring 2.0 Blog</title>
+        <link>https://dev-in-book.github.io/refactoring/blog</link>
+        <description>Refactoring 2.0 Blog</description>
+        <lastBuildDate>Tue, 07 Dec 2021 00:00:00 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Member]]></title>
+            <link>https://dev-in-book.github.io/refactoring/blog/member</link>
+            <guid>member</guid>
+            <pubDate>Tue, 07 Dec 2021 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[MDX Blog Post 작성하기]]></title>
+            <link>https://dev-in-book.github.io/refactoring/blog/mdx-blog-post</link>
+            <guid>mdx-blog-post</guid>
+            <pubDate>Mon, 06 Dec 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[Blog posts support Docusaurus Markdown features, such as MDX.]]></description>
+        </item>
+    </channel>
+</rss>
