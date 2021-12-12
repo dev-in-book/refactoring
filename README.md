@@ -9,10 +9,10 @@
 
 
 ## 📅 진행 기간
-21년 12월 12일 ~ 
+21년 12월 12일 ~ 22년 3월
 
 ## 사이트
-- 주소: `추후 기재` (Docusaurus를 기반으로 제작하였습니다.)
+- 주소: [https://dev-in-book.github.io/refactoring/](https://dev-in-book.github.io/refactoring/) (Docusaurus를 기반으로 제작하였습니다.)
 
 
 ### Installation
