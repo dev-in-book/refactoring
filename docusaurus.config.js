@@ -7,8 +7,8 @@ const darkCodeTheme = require("prism-react-renderer/themes/dracula");
   module.exports = {
     title: "Refactoring 2.0",
     tagline: "리팩터링2.0 완독하기 프로젝트",
-    url: "https://..com",
-    baseUrl: "/",
+    url: "https://dev-in-book.github.io",
+    baseUrl: "/refactoring/",
     onBrokenLinks: "throw",
     onBrokenMarkdownLinks: "warn",
     favicon: "img/favicon.ico",
