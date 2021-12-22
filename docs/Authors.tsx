@@ -26,9 +26,15 @@ const AUTHORS = {
     url: 'https://github.com/guswnl0610',
     image_url: 'https://github.com/guswnl0610.png',
   },
+  Danbi: {
+    name: 'Danbi',
+    title: 'Front End Engineer',
+    url: 'https://github.com/itssweetrain',
+    image_url: 'https://github.com/itssweetrain.png',
+  },
 };
 
-type TAuthor = 'positiveko' | 'saengmotmi' | 'Woongjo-Yoo' | 'Mengkki';
+type TAuthor = 'positiveko' | 'saengmotmi' | 'Woongjo-Yoo' | 'Mengkki | Danbi';
 
 interface IAuthors {
   bookLeader: TAuthor;
