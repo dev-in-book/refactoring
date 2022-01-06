@@ -1,0 +1,223 @@
+---
+sidebar_position: 1
+---
+
+import Authors from './Authors.tsx';
+
+# 4장 테스트 구축하기
+
+<Authors bookLeader="Woongjo-Yoo" />
+
+---
+프로그래머들의 일과를 살펴보면 실제 코드 작성에는 그리 많은 시간이 들지 않는다. 
+
+대부분의 시간은 디버깅에 사용되고, 그 중에서도 버그를 찾는데 대부분의 시간을 할애한다(대부분 버그 수정 자체는 금방 끝난다).
+
+그리고 버그를 수정하면서 또 다른 버그를 심기도 하는데 그 사실을 나중에서 알아채는 경우도 있다. 
+
+클래스마다 혹은 함수마다 자동화된 테스트 코드를 작성해두면 앞으로 코드 작성에 많은 수고를 덜 수 있다. 
+
+켄트 백이 창시한 TDD (Test-Driven Develpoment)라는 기법을 작자도 매우 추천한다.
+
+프로그래밍을 본격적으로 시작하기 전, 필요한 기능의 명세를 테스트 코드로 모두 작성해두고 코딩을 시작하는 방식.
+
+### 예시 코드
+
+```js
+function sampleProvinceData() {
+	return {
+		name: 'Asia',
+		producers: [
+			{ name: 'Byzantium', cost: 10, production: 9 },
+			{ name: 'Attalia', cost: 12, production: 10 },
+			{ name: 'Sinope', cost: 10, production: 6 },
+		],
+		demand: 30,
+		price: 20
+	};
+}
+
+class Province {
+	constructor(doc) {
+		this._name = doc.name;
+		this._producers = [];
+		this._totalProduction = 0;
+		this._demand = doc.demand;
+		this._price = doc.price;
+		doc.producers.forEach(d => this.addProducer(new Producer(this, d)));
+	}
+
+	addProducer(arg) {
+		this._producers.push(arg);
+		this._totalProduction += arg.production;
+	}
+
+	get name() { return this._name; }
+	get producers() { return this._producers.slice(); }
+	get totalProduction() { return this._totalProduction; }
+	get demand() { return this._demand; }
+	set demand(arg) { this._demand = Number(arg); }
+	get price() { return this._price; }
+	set price() j{ this._price = Number(arg); }
+
+	get shortfall() { return this._demand - this.totalProduction; } // 생산분 부족 계산하는 코드
+	get profit() { return this.demandValue - this.demandCost; }
+	get demandValue() { return this.satisfiedDemand * this.price; }
+	get satisfiedDemand() { return Math.min(this._demand, this.totalProduction); }
+	get demandCost() {
+		let remainingDemand = this.demand;
+		let result = 0;
+		this.producers.sort((a, b) => a.cost - b.cost).forEach(p => {
+			const contribution = Math.min(remainingDemand, p.production);
+			remainingDemand -= contribution;
+			result += contribution * p.cost;
+		});
+		return result;
+	}
+}
+
+class Producer {
+	constructor(aProvince, data) {
+		this._province = aProvince;
+		this._cost = data.cost;
+		this._name = data.name;
+		this._production = data.production || 0
+	}
+
+	get name() { return this._name; }
+	get cost() { return this._cost; }
+	set cost(arg) { this._cost = Number(arg); }
+	get production() { return this._production; }
+	set production(amountStr) {
+		const amount = Number(amountStr);
+		const newProduction = Number.isNan(amount) ? 0 : amount;
+		this._province.totalProduction += newProduction - this._production;
+		this._production = newProduction;
+	}
+}
+```
+
+### 예시 테스트 코드
+
+```js
+describe('province', () => { // describe, it 을 이용해 무엇을 테스트하는지에 대한 설명 제공
+	it('shortfall', () => {
+		const asia = new Province(sampleProvinceData()); // fixture: 테스트에 필요한 데이터와 객체
+		expect(asia.shortfall).toEqual(5); // 검증
+	});
+});
+```
+
+이렇게 통과된 테스트를 보고도 혹시 내 테스트 코드가 잘못되지는 않았을까 생각할 수 있다. 
+
+그렇기 때문에 테스트가 실패하는 모습을 최소한 한번씩은 직접 확인해본다. -> 주로 일시적으로 코드에 오류를 주입한다. 예를 들면... `get shortfall() { return this._demand - this.totalProductyion * 2; }`
+
+리팩터링 및 코드를 작성하면서 최대한 자주 테스트를 실행하고, 만약 테스트가 실패하게 되면 그 이상 코드를 작성하거나 리팩터리앟지 말고 최근 변경을 수정해보도록 한다. 
+
+### 테스트 추가하기
+
+테스트를 추가할 때는 단순히 데이터를 읽고 쓰는 접근자 등은 테스트할 필요가 없고, 위험 요인을 중심으로 작성하도록 한다. 
+
+**완벽하게 만드느라 테스트를 수행하지 못하느니, 불완전한 테스트라도 작성해 실행하는 것이 낫다**
+
+불필요한 테스트를 너무 많이 만들 필요는 없다. 테스트가 필요한 아주 중요한 포인트를 테스트로 만들어 적은 수의 테스트로 최고의 효율을 얻도록 한다. 
+
+```js
+const asia = new Province(sampleProvinceData()); // 이렇게는 절대 하면 안 된다!!
+
+it('shortfall', () => {
+	expect(asia.shortfall).toEqual(5);
+	});
+it('profit', () => {
+	
+	expect(asia.profit).toEqual(230);
+});
+```
+
+테스트끼리 상호작용하게 하는 공유된 픽스처는 정말 안 된다. --> 매우 매우 공감. 이것 때문에 반나절 고생한 적 있음
+
+```js
+let asia;
+
+beforeEach(() => {
+	asia = new Province(sampleProvinceData());
+});
+```
+
+위처럼 `beforeEach` 를 사용하여 각 테스트가 실행되기 전마다 객체를 새롭게 할당해준다. 
+
+그리고 각 테스트마다 별개의 데이터를 사용하는 것보다는 동일한 데이터를 기반으로 테스트를 하는 것이 테스트의 신뢰도를 더 높일 수 있다. 
+
+단, 텍스처가 생성하는데 매우 오래걸릴 경우 예외 케이스가 있을 수 있다.
+
+### 픽스처 수정하기
+
+사용자가 값을 변경하면서 픽스처의 내용도 수정되는 경우도 테스트해볼 수 있다. 
+
+```js
+it('change production', () => {
+	asia.producers[0].production = 20;
+	expect(asia.shortfall).toEqual(-6);
+	expect(asia.profit).toEqual(292);
+});
+```
+
+흔히 위와 같은 패턴으로 테스트를 한다. 
+
+* `설정 - 실행 - 검증 | setup - exercise - verify`
+* `조건 - 발생 - 결과 | given - when - then`
+* `준비 - 수행 - 단언 | arrange - act - assert`
+
+위와 같은 이름으로 붑리는 패턴이 있다. it 구문 하나에 하나의 패턴이 모두 담겨있을 수도 있고, 초기 세팅은 `beforeEach` 와 같은 것으로 빠져있을 수도 있다. 
+
+어쨋거나 it 구문 하나 당 하나를 검증하도록 하는 것이 좋다. 
+
+### 결계 조건 검사하기
+
+**성공 - 실패 - 이상한 값 테스트 하기**
+
+여태까지의 테스트는 모두 우리 의도대로 사용되는 `happy path` 상황에 집중했다. 이 범위를 벗어나는 지점에서 문제가 생기면 어떤 일이 벌어나는지도 테스트하는 것이 좋다. 
+
+```js
+describe('no producers', () => {
+	let noProducers;
+
+	beforeEach(() => {
+		const data = {
+			name: 'No producers',
+			producers: [], // 배열이 비었을 때는??
+			demand: 30,
+			price: 20
+		};
+		noProducers = new Province(data);
+	});
+
+	it('shortfall', () => {
+		expect(noProducers.shortfall).toEqual(30);
+	});
+	it('profit', () => {
+		expect(noProducers.profit).toEqual(0);
+	});
+});
+```
+
+* 배열이라면 빈 배열일 경우
+* 숫자형이라면, 0, 음수 엄청 큰 수 등등
+* 배열인데 문자열이 들아가는 경우 등
+
+의식적으로 프로그램을 망가뜨리려는 관점으로 접근하여 사악한 테스트들을 작성해보자.
+모든 버그를 잡아낼 수는 없다! 문제가 생길 여지가 있는 부분을 집중적으로 테스트해 최소한의 테스트로 최대의 효율을 누리도록 해보자. 
+
+### 끝나지 않은 여정
+
+테스트는 리펙터링을 하기 앞서 수행해야 할 매우 중요한 과정
+
+리팩터링을 하면서 테스트 코드도 꾸준히 리팩터링하도록 한다. 
+
+**새로운 버그를 발견한다면 해당 버그를 재현할 수 있는 테스트 코드를 먼저 작성하자**
+
+테스트 커버리지는 테스트의 품질과는 크게 연관이 없을 수 있다. 
+
+테스트의 품질은 주관적이다. 
+
+결과적으로 리팩터링한 뒤 테스트 결과가 모두 성공이라면 적어도 리팩터링 과정에서 발견된 버그가 하나도 없다고 확신할 수 있다면 좋은 테스트 품질을 가졌다고 볼 수 있다!
