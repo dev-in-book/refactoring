@@ -22,7 +22,7 @@ const darkCodeTheme = require("prism-react-renderer/themes/dracula");
         ({
           docs: {
             sidebarPath: require.resolve("./sidebars.js"),
-            editUrl: "https://github.com/dev-in-book/refactoring",
+            editUrl: "https://github.dev/dev-in-book/refactoring/blob/main",
           },
           blog: {
             showReadingTime: true,
