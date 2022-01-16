@@ -1,0 +1,365 @@
+---
+sidebar_position: 1
+---
+
+import Authors from './Authors.tsx';
+
+# 6장 기본적인 리팩터링 上
+
+<Authors bookLeader='positiveko' />
+
+## 6-1 함수 추출하기
+
+### 배경
+
+코드 조각을 찾아 무슨 일을 하는지 파악한 다음, 독립된 함수로 추출하고 목적에 맞는 이름을 붙인다.
+코드를 독립적인 함수로 묶을 때의 기준은 **목적과 구현을 분리**하는 방식으로 한다.
+코드를 보고 어떤 기능을 하는지 파악하는 데 한참이 걸린다면 그 부분을 함수로 추출하고 '무슨 일'을 하는지 이름을 지어둔다.
+이렇게 하면 나중에 코드를 읽을 때 목적이 눈에 들어오고 본문 코드(구체적으로 수행하는 일)에는 더 이상 신경 쓰지 않아도 된다.
+
+### 절차
+
+1. 함수를 새로 만들고 목적을 잘 드러낸느 이름을 붙인다. ('어떻게'가 아닌 '무엇을' 하는지가 드러나야 한다.)
+2. 추출할 코드를 원본 함수에서 복사하여 새 함수에 붙여넣는다.
+3. 추출한 코드 중 원본 함수의 지역 변수를 참조하거나 추출한 함수의 유효범위를 벗어나는 변수는 없는지 검사한다. 있다면 매개변수로 전달한다.
+4. 변수를 다 처리했다면 컴파일한다.
+5. 원본 함수에서 추출한 코드 부분을 새로 만든 함수를 호출하는 문장으로 바꾼다.(즉, 추출한 함수로 일을 위임한다)
+6. 테스트한다.
+7. 다른 코드에 방금 추출한 것과 똑같거나 비슷한 코드가 없는지 살핀다. 있다면 방금 추출한 새 함수를 호출하도록 바꿀지 검토한다. (인라인 코드를 함수 호출로 바꾸기 - 8-5절)
+
+### 예시
+
+#### 예시 1: 유효범위를 벗어나는 변수가 없을 때
+
+```js
+function printOwing(invoice) {
+  printBatnner();
+  let outstanding = calculateOutstanding();
+
+  // 세부 사항 출력
+  console.log(`고객명: ${invoice.customer}`);
+  console.log(`채무액: ${outstanding}`);
+}
+```
+
+```js
+function printOwing(invoice) {
+  printBatnner();
+  let outstanding = calculateOutstanding();
+  printDetails(outstanding);
+
+  function printDetails(outstanding) {
+    console.log(`고객명: ${invoice.customer}`);
+    console.log(`채무액: ${outstanding}`);
+  }
+}
+```
+
+#### 예시 2: 지역 변수를 사용할 때
+
+지역 변수를 사용하지만 다른 값을 대입하지는 않을 경우 지역 변수를 매개 변수로 넘겨 함수를 추출한다.
+
+```js
+function printOwing(invoice) {
+  printBatnner();
+  let outstanding = calculateOutstanding();
+  printDetails(invoice, outstanding);
+}
+
+function printDetails(invoice, outstanding) {
+  console.log(`고객명: ${invoice.customer}`);
+  console.log(`채무액: ${outstanding}`);
+}
+```
+
+#### 예시 3: 지역 변수의 값을 변경할 때
+
+매개 변수에 값을 대입하는 코드가 있다면 그 변수를 쪼개서 임시 변수를 하나 만들고 그 변수에 대입하게 한다.
+
+```js
+function printOwning(invoice) {
+  let outstanding = 0;
+
+  printBanner();
+  for (const o of invoice.orders) {
+    outstanding += o.amount;
+  }
+
+  recordDueDate(invoice);
+  printDetails(invoice, outstanding);
+}
+```
+
+```js
+function printOwing(invoice) {
+  printBanner();
+
+  const outstanding = calculateOutstanding(invoice);
+  recordDueDate(invoice);
+  printDetails(invoice, outstanding);
+
+  function calculateOutstanding(invoice) {
+    let result = 0;
+    for (const o of invoice.orders) {
+      result += o.amount;
+    }
+    return result;
+  }
+}
+```
+
+## 6-2 함수 인라인하기
+
+### 배경
+
+때로는 **함수 본문이 이름만큼 명확한 경우**도 있다. 또는 함수 본문 코드를 이름만큼 깔끔하게 리팩터링할 때도 있다. 이럴 때는 그 함수를 제거한다.
+간접 호출은 유용할 수도 있지만 쓸데없는 간접 호출은 거슬릴 뿐이다.
+
+간접 호출을 너무 과하게 써서 위임 관계가 복잡하게 얽혀 있는 코드, 리팩터링 과정에서 잘못 추출된 함수들도 인라인한다.
+
+### 절차
+
+1. 다형 메서드인지 확인한다.
+2. 인라인할 함수를 호출하는 곳을 모두 찾는다.
+3. 각 호출문을 함수 본문으로 교체한다.
+4. 하나씩 교체할 때마다 테스트한다.
+5. 함수 정의(원래 함수)를 삭제한다.
+
+간단하지만 실제로 그렇지 않을 때가 많다. 상황이 복잡한 경우에는 함수 인라인하기를 적용하지 않는다.
+
+### 예시
+
+핵심은 항상 단계를 잘게 나눠서 처리하는 데에 있다.
+
+```js
+function getRating(driver) {
+  return moreThanFiveLateDeliveries(driver) ? 2 : 1;
+}
+
+function moreTahnFiveLateDeliveries(driver) {
+  return driver.numberOfLateDeliveries > 5;
+}
+```
+
+```js
+function getRating(driver) {
+  return driver.numberOfLateDeliveries > 5 ? 2 : 1;
+}
+```
+
+## 6-3 변수 추출하기
+
+### 배경
+
+표현식이 너무 복잡해서 이해하기 어려울 때가 있다. 이럴 때 지역 변수를 활용하면 표현식을 쪼개 관리하기 더 쉽게 만들 수 있다.
+그러면 복잡한 로직을 구성하는 단계마다 이름을 붙일 수 있어서 **코드의 목적을 훨씬 명확하게 드러낼 수 있다**.
+
+이 과정에서 추가한 변수는 디버깅에도 도움된다. 디버거에 중단점을 지정하거나 상태를 출력하는 문장을 추가할 수 있기 때문이다.
+
+### 절차
+
+1. 추출하려는 표현식에 부작용은 없는지 확인한다.
+2. 불변 변수를 하나 선언하고 이름을 붙일 표현식의 복제본을 대입한다.
+3. 원본 표현식을 새로 만든 변수로 교체한다.
+4. 테스트한다.
+5. 표현식을 여러 곳에서 사용한다면 각각을 새로 만든 변수로 교체한다. 하나 교체할 때마다 테스트한다.
+
+### 예시
+
+#### 예시 1: 간단한 계산식
+
+```js
+return (
+  order.quantity * order.itemPrice -
+  Math.max(0, order.quantity - 500) * order.itemPrice * 0.05 +
+  Math.min(order.quantity * order.itemPrice * 0.1, 100)
+);
+```
+
+```js
+const basePrice = order.quantity * order.itemPrice;
+const quantityDiscount =
+  Math.max(0, order.quantity - 500) * order.itemPrice * 0.05;
+const shippint = Math.min(order.quantity * order.itemPrice * 0.1, 100);
+return basePrice - quantityDiscount + shipping;
+```
+
+#### 예시 2: 클래스 안에서
+
+클래스 전체에 영향을 줄 때에는 변수가 아니라 메서드로 추출한다.
+
+```js
+class Order {
+  constructor(aRecord) {
+    this._data = aRecord;
+  }
+
+  get quantity() {
+    return this._data.quantity;
+  }
+  get itemPrice() {
+    return this._data.itemPrice;
+  }
+
+  get price() {
+    return (
+      this.quantity * this.itemPrice -
+      Math.max(0, this.quantity - 500) * this.itemPrice * 0.05 +
+      Math.min(this.quantity * this.itemPrice * 0.1, 100)
+    );
+  }
+}
+```
+
+```js
+class Order {
+  constructor(aRecord) {
+    this._data = aRecord;
+  }
+
+  get quantity() {return this._data.quantity}
+  get itemPrice() {return this._data.itemPrice}
+
+  get price() {
+    return this.basePrice - this.quantityDiscount + this.shipping;
+  }
+  get basePrice() {return return this.quantity * this.itemPrice;}
+  get quantityDiscount() {return Math.max(0, this.quantity - 500) * this.itemPrice * 0.05;}
+  get shipping() {return Math.min(this.quantity * this.itemPrice * 0.1, 100);}
+}
+```
+
+## 6-4 변수 인라인하기
+
+### 배경
+
+변수는 함수 안에서 표현식을 가리키는 이름으로 쓰이며, 대체로 긍정적인 효과를 준다.
+하지만 **그 이름이 원래 표현식과 별 다르지 않고 주변 코드를 리팩터링 하는 데에 방해가 된다면 그 변수를 인라인**한다.
+
+### 절차
+
+1. 대입문의 우변(표현식)에서 부작용이 생기지는 않는지 확인한다.
+2. 변수가 불변으로 선언되지 않았다면 불변으로 만든 후 테스트한다.
+3. 이 변수를 가장 처음 사용하는 코드를 찾아서 대입문 우변의 코드로 바꾼다.
+4. 테스트한다.
+5. 변수를 사용하는 부분을 모두 교체할 때까지 이 과정을 반복한다.
+6. 변수 선언문과 대입문을 지운다.
+7. 테스트한다.
+
+### 예시
+
+```js
+let basePrice = anOrder.basePrice;
+return basePrice > 1000;
+```
+
+```js
+return anOrder.basePrice > 1000;
+```
+
+## 6-5 함수 선언 바꾸기
+
+### 배경
+
+함수는 프로그램을 작은 부분으로 나누는 주된 수단이다. 함수 선언은 각 부분이 서로 맞물리는 방식을 표현하고 실질적으로 소프트웨어 시스템의 구성 요소를 조립하는 **연결부 역할**을 한다.
+이러한 **연결부에서 가장 중요한 요소는 함수의 이름**이다. 이름이 좋으면 함수의 구현 코드를 살펴볼 필요 없이 호출문만 보고도 무슨 일을 하는지 파악할 수 있다.
+
+함수의 매개변수도 마찬가지다. 매개변수는 함수가 외부 세계와 어우러지는 방식을 정의한다.
+매개변수를 넓히면 **함수의 활용 범위가 넓어지고, 다른 모듈과의 결합 coupling을 제거할 수도 있다**.
+
+매개변수를 올바르게 선택하는 기준에는 정답이 없다. 어떻게 연결하는 것이 더 나은지 이해하게 될 때마다 리팩터링한다.
+
+### 절차
+
+#### 간단한 절차
+
+1. 매개변수를 제거하려거든 먼저 함수 본문에서 제거 대상 매개변수를 참조하는 곳은 없는지 확인한다.
+2. 메서드 선언을 원하는 형태로 바꾼다.
+3. 기존 메서드 선언을 참조하는 부분을 모두 찾아서 바뀐 형태로 수정한다.
+4. 테스트한다.
+
+#### 마이그레이션 절차
+
+1.  이어지는 추출 단계를 수월하게 만들어야 한다면 함수의 본문을 적절히 리팩터링한다.
+2.  함수 본문을 새로운 함수로 추출한다.
+3.  추출한 함수에 매개변수를 추가해야 한다면 '간단한 절차'를 따라 추가한다.
+4.  테스트한다.
+5.  기존 함수를 인라인한다.
+6.  이름을 임시로 붙여뒀다면 함수 선언 바꾸기를 한 번 더 적용해서 우너래 이름으로 되돌린다.
+7.  테스트한다.
+
+### 예시
+
+#### 예시 1: 함수 이름 바꾸기 (간단한 절차)
+
+함수 이름을 너무 축약하지 않는다.
+
+```js
+function circum(radius) {
+  return 2 * Math.PI * radius;
+}
+```
+
+```js
+function circumference(radius) {
+  return 2 * Math.PI * radius;
+}
+```
+
+
+#### 예시 2: 함수 이름 바꾸기 (마이그레이션 절차)
+```js
+function circum(radius) {
+  return 2 * Math.PI * radius;
+}
+```
+
+```js
+function circum(radius) {
+  return circumference(radius);
+}
+
+function circumference(radius) {
+  return 2 * Math.PI * radius;
+}
+```
+
+circum()의 클라이언트 모두가 circumference()를 사용할 때까지 기다리고, 모두 변경이 된다면 circum()을 삭제한다.
+
+## 6-6 변수 캡슐화하기
+
+### 배경
+
+리팩터링은 결국 프로그램의 요소를 조작하는 일이다. 함수를 사용한다는 건 대체로 호출한다는 뜻이고, 함수의 이름을 바꾸거나 다른 모듈로 옮기기는 어렵지 않다.
+반대로 데이터는 함수보다 다루기가 까다로운데, 데이터는 참조하는 모든 부분을 한번에 바꿔야 코드가 제대로 작동하기 때문이다. 유효 범위가 좁은 데이터는 어려울 게 없지만, 유효범위가 넓어질수록 다루기 어려워진다.
+전역 데이터가 골칫거리인 이유도 이 때문이다.
+
+따라서 접근 범위가 넓은 데이터를 옮길 때는 먼저 **그 데이터로의 접근을 독점하는 함수를 만드는 식으로 캡슐화**하는 것이 가장 좋은 방법일 때가 많다.
+
+데이터 캡슐화는 데이터를 변경하고 사용하는 코드를 감시할 수 있는 통로가 되기 때문에 데이터 변경 전 검증이나 변경 후 추가 로직을 쉽게 끼워 넣을 수 있게 해준다.
+데이터를 캡슐화하면서 자주 사용하는 데이터에 대한 결합도가 높아지는 일을 막을 수 있다.
+
+객체 지향에서 객체의 데이터를 항상 private으로 유지해야 한다고 강조하는 이유가 바로 여기에 있다.
+public 필드를 반견할 때마다 캡슐화해서 가시 범위를 제한하자.
+
+불변 데이터는 가변 데이터보다 캡슐화할 이유가 적다. 데이터가 변경될 일이 없어서 갱신 전 검증 같은 로직이 필요없기 때문이다.
+
+### 절차
+
+1. 변수로의 접근과 갱신을 전담하는 캡슐화 함수들을 만든다.
+2. 정적 검사를 수행한다.
+3. 변수를 직접 참조하던 부분을 모두 적절한 캡슐화 함수 호출로 바꾼다. 하나씩 바꿀 때마다 테스트한다.
+4. 변수의 접근 범위를 제한한다.
+5. 테스트한다.
+6. 변수 값이 레코드라면 레코드 캠슐화하기를 적용할지 고려해본다.
+
+### 예시
+```js
+let defaultOwner = {firstName: '마틴', lastName: '파울러'};
+```
+
+```js
+let defaultOwnerData = {firstName: '마틴', lastName: '파울러'};
+function defaultOwner() {return defaultOwnerData;}
+function setDefaultOwner(arg) {defaultOwnerData = arg;}
+```
