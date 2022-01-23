@@ -1,0 +1,812 @@
+---
+sidebar_position: 1
+---
+
+import Authors from "./Authors.tsx";
+
+# 6장 기본적인 리팩터링 下
+
+<Authors bookLeader="Danbi" />
+
+## 6-7 변수 이름 바꾸기
+
+### 배경
+
+명확한 이름짓기는 명확한 프로그래밍을 돕는다. <br/>
+특히 이름의 중요성은 그 **사용 범위**에 영향을 많이 받는다. 함수 호출 한 번으로 끝나지 않고 값이 영속되는 필드라면 이름에 더 신경 써야 한다.
+
+### 절차
+
+1. 폭넓게 쓰이는 변수라면 **변수 캡슐화하기**를 고려한다.
+2. 이름을 바꿀 변수를 참조하는 곳을 모두 찾아서, 하나씩 변경한다.
+3. 테스트한다.
+
+### 예시
+
+#### 가장 간단한 예시: 임시 변수나 인수처럼 유효범위가 함수 하나로 국한된 변수
+
+#### 예시 1: 폭넓게 쓰이는 변수: 변수 캡슐화하기
+
+```js
+let tpHd = "untitled";
+```
+
+어떤 참조는 다음과 같이 변수를 읽기만 한다.
+
+```js
+result += `<h1>${tpHd}</h1>`;
+```
+
+값을 수정하는 곳도 있다고 해보자.
+
+```js
+result += `<h1>${tpHd}</h1>`;
+```
+
+1. 이럴 때, 변수 캡슐화하기로 처리한다.
+
+```js
+result += `<h1>${tpHd}</h1>`;
+
+setTitle(obj['articleTitle']);
+
+//tpHd 변수의 게터
+function title() {
+  return thHd;
+}
+
+//tpHd 변수의 세터
+function setTitle(arg) {
+  tpHd = arg;
+}
+
+캡슐화 후에는 변수 이름을 바꿔도 된다.
+let _title = "untitled";
+
+function title() {
+  return _title;
+}
+
+function setTitle(arg) {
+  _title = arg;
+}
+```
+
+2. 이름을 바꿀 변수를 참조하는 곳을 모두 찾아서, 하나씩 변경한다. <br/>
+    <br />
+
+#### 예시 2: 상수 이름 바꾸기
+
+상수의 이름은 캡슐화하지 않고도 복제 방식으로 점진적으로 바꿀 수 있다.
+
+```js
+const cpyNm = "애크미 구스베리";
+}
+```
+
+먼저 원본의 이름을 바꾼 후, 원본의 원래 이름과 같은 복제본을 만든다.
+
+```js
+const companyName = "애크미 구스베리";
+const cpyNm = compnayName;
+}
+```
+
+이제 기존 이름(복제본)을 참조하는 코드들은 새 이름으로 점진적으로 바꿀 수 있다.
+기존 이름을 삭제했다가 테스트에 실패하면 되돌리는 방식보다 새 이름으로 선언한 다음 기존 이름에 복사하는 방식이 조금이라도 더 쉽다면 후자를 선택한다.
+
+## 6-8 매개변수 객체 만들기
+
+### 배경
+
+데이터 항목 여러 개가 서로 다른 함수에 공통적으로 쓰이는 경우가 있다. 이런 데이터 무리는 데이터 구조 하나로 모아준다. <br/> <br/>
+데이터 뭉치를 데이터 구조로 묶으면
+
+1. 데이터 사이의 관계가 명확해진다.
+2. 함수가 이 데이터 구조를 받게 하면 매개변수 수가 줄어든다
+3. 같은 데이터 구조를 사용하는 모든 함수가 원소를 참조할 때 항상 똑같은 이름을 사용하기 때문에 일관성도 높여준다.
+
+하지만 이 리팩터링의 진정한 힘은 코드를 더 근본적으로 바꿔준다는 데 있다.
+이러한 데이터 구조를 새로 발견하면 이 데이터 구조를 활용하는 형태로 프로그램 동작을 재구성한다.
+데이터 구조에 담길 데이터에 공통으로 적용되는 동작을 추출해서 함수로 만드는 것이다. 이 과정에서
+
+1. 공용 함수를 나열하는 식으로 작성할 수도 있고,
+2. 이 함수들과 데이터를 합쳐 클래스로 만들 수도 있다.
+
+이 모든 것의 시작은 매개변수 객체 만들기부터이다.
+
+### 절차
+
+1. 적당한 데이터 구조가 아직 마련되어 있지 않다면 새로 만든다.
+2. 테스트한다.
+3. 함수 선언 바꾸기로 새 데이터 구조를 매개변수로 추가한다.
+4. 테스트한다.
+5. 함수 호출 시 새로운 데이터 구조 인스턴스를 넘기도록 수정한다. 하나씩 수정할 때마다 테스트한다.
+6. 기존 매개변수를 사용하던 코드를 새 데이터 구조의 원소를 사용하도록 바꾼다.
+7. 다 바꿨다면 기존 매개변수를 제거하고 테스트한다.
+
+### 예시
+
+온도 측정값 배열에서 정상 작동 범위를 벗어난 것이 있는지 검사하는 코드이다. 온도 측정값을 표현하는 데이터는 다음과 같다.
+
+```js
+const station = {
+    name: "ZB1",
+    readings: [
+        { temp: 47, time: "2016-11-10 09:10" },
+        { temp: 53, time: "2016-11-10 09:20" },
+        { temp: 58, time: "2016-11-10 09:30" },
+        { temp: 53, time: "2016-11-10 09:40" },
+        { temp: 51, time: "2016-11-10 09:50" },
+    ],
+};
+```
+
+다음은 정상 범위를 벗어난 측정값을 찾는 함수다.
+
+```js
+function readingsOutsideRange(station, min, max) {
+    return station.readings.filter((r) => r.temp < min || r.temp > max);
+}
+```
+
+이 함수는 다음과 같이 호출될 수 있다.
+
+```js
+alerts = readingsOutsideRange(
+    station,
+    operatingPlan.temperatureFloor, //min
+    operatingPlan.temperatureCeiling
+); //max
+```
+
+### 결과
+
+```js
+const range = new NumberRange(operatingPlan.temperatureFloorm operatingPlan.temperatureCeiling);
+alerts = readingsOutsideRange(station, range);
+```
+
+NumberRange 라는 데이터를 표현하는 클래스를 선언하여, operatingPlan의 데이터를 각각 넣어주고 있다.
+
+-   **매개변수 객체**로 만들어서 readingsOutSideRange의 매개변수의 수도 줄이고 데이터 구조를 하나로 모아주고 있다.
+    <br /> <br />
+
+호출 코드를 보면 operatingPlan의 데이터 항목 두 개를 쌍으로 가져와서 readingsOutsideRange()로 전달한다.
+그리고 operatingPlan은 범위의 시작과 끝 이름을 readingsOutsideRange()와 다르게 표현한다. 이와 같은 범위라는 개념은 객체 하나로 묶어 표현하는 게 나은 대표적인 예다.
+
+1. 먼저 묶은 데이터를 표현하는 클래스부터 선언하면,
+
+```js
+class NumberTange {
+    constructor(min, max) {
+        this._data = { min: min, max: max };
+    }
+    get min() {
+        return this._data.min;
+    }
+    get max() {
+        return this._data.max;
+    }
+}
+```
+
+새로 만든 객체를 readingsOutsideRange()의 매개변수로 추가하도록 함수 선언을 바꾼다.
+
+```js
+// highlight-next-line
+function readingsOutsideRange(station, min, max, range) {
+    return station.readings.filter((r) => r.temp < min || r.temp > max);
+}
+```
+
+온도 범위를 객체 형태로 전달하도록 호출문을 하나씩 바꾼다.
+
+```js
+// highlight-next-line
+const range = new NumberRange(operationPlan.temperatureFloor, operationPlan.temperatureCeiling);
+alerts = readingsOutsideRange(station, operatingPlan.temperatureFloor, operatingPlan.temperatureCeiling, range);
+```
+
+기존 매개변수를 사용하는 부분을 변경한다. <br/>
+최댓값부터 바꾸면, 기존의 매개변수 max를 제거하고 range.max 값을 이용한다.
+
+```js
+function readingsOutsideRange(station, min, *max, range) {
+  return station.readings
+  // highlight-next-line
+    .filter(r => r.temp < min || r.temp > range.max);
+}
+```
+
+```js
+const range = new NumberRange(operatingPlan.temperatureFloor,
+                              operatingPlan.temperatureCeiling);
+alerts = readingsOutsideRange(station, operatingPlan.temperatureFloor, *operatingPlan.temperatureCeiling, range);
+```
+
+최소값 매개변수 또한 똑같이 제거한다.
+
+#### 진정한 값 객체로 거듭나기
+
+매개변수 그룹을 객체로 교체하는 작업을 보았다. 하지만 이는 진정한 값 객체로 거듭나기 위한 기초 작업일뿐이다.
+앞에서처럼 클래스로 만들어두면 관련 동작들을 이 클래스로 옮길 수 있다는 이점이 생긴다.
+이 예에서는 온도가 허용 범위 안에 있는지 검사하는 메서드를 클래스에 추가할 수 있다.
+
+```js
+function readingsOutsideRange(station, range) {
+  return station.readings
+    .filter(r => !.range.contains(r.temp));
+}
+```
+
+```js
+contains(arg) {
+  return (arg >= this.min && arg <= this.max);
+}
+```
+
+이러한 값 쌍이 어떻게 사용되는지 파악한다면 다른 유용한 동작들도 범위 클래스로 옮겨서 전반에서 값을 활용하는 방식을 간소화할 수 있다.
+
+## 6-9 여러 함수를 클래스로 묶기
+
+### 배경
+
+함수 호출 시 인수로 전달되는 공통 데이터를 중심으로 긴밀하게 엮여 작동하는 함수 무리를 발견하면 클래스 하나로 묶는다.
+
+1. 클래스로 묶으면 이 함수들이 공유하는 공통 환경을 더 명확하게 표현할 수 있고
+2. 각 함수에 전달되는 인수를 줄여서 객체 안에서의 함수 호출을 간결하게 만들 수 있다.
+3. 이런 객체를 시스템의 다른 부분에 전달하기 위한 참조를 제공할 수 있다.
+
+함수를 한데 묶는 또 다른 방법으로는 여러 함수를 **변환 함수로 묶기**(6-10)도 있다. 어느 방식으로 진행할지는 프로그램 문맥을 넓게 살펴보고 정해야 한다.
+
+### 절차
+
+1. 함수들이 공유하는 공통 데이터 레코드를 캡슐화한다.
+2. 공통 레코드를 사용하는 함수 각각을 새 클래스로 옮긴다.
+3. 데이터를 조작하는 로직들은 함수로 추출해서 새 클래스로 옮긴다.
+
+### 예시
+
+```js
+reading = { customer: "ivan", quantity: 10, month: 5, year: 2017 };
+```
+
+```js
+//클라이언트 1...
+const aReading = acquireReading();
+// highlight-next-line
+const baseCharge = baseRate(aReading.month, aReading.year) * aReading.quantity;
+```
+
+```js
+//클라이언트 2...
+const aReading = acquireReading();
+// highlight-next-line
+const base = baseRate(aReading.month, aReading.year) * aReading.quantity;
+const taxableCharge = Math.max(0, base - taxThreshold(aReading.year));
+```
+
+기본요금 계산 공식이 똑같다.
+
+```js
+//클라이언트 3...
+const aReading = acquireReading();
+const basicChargeAmount = calculateBaseCharge(aReading);
+
+//기본 요금 계산 함수
+function calculateBaseCharge(aReading) {
+    return baseReate(aReading.month, aReading.year) * aReading.quantity;
+}
+```
+
+이렇게 바꿔준 함수를 데이터 처리 코드 가까이 둠으로써 못 보고 지나치지 않게 한다.
+그러기 위한 좋은 방법으로, 데이터를 클래스로 만들 수 있다.
+
+1. 먼저 레코드를 클래스로 변환하기 위해 레코드를 캡슐화한다.
+
+```js
+class Reading {
+    constructor(data) {
+        this._customer = data.customer;
+        this._quantity = data.quantity;
+        this._month = data.month;
+        this._year = data.year;
+    }
+    get customer() {
+        return this._customer;
+    }
+    get quantity() {
+        return this._quantity;
+    }
+    get month() {
+        return this._month;
+    }
+    get year() {
+        return this._year;
+    }
+}
+```
+
+2. 이미 만들어져 있는 calculateBaseCharge()부터 옮긴다.
+
+```js
+//클라이언트 3...
+// highlight-next-line
+const rawReading = acquireReading();
+// highlight-next-line
+const aReading = new Reading(rawReading);
+const basicChargeAmount = calculateBaseCharge(aReading);
+```
+
+calculateBaseCharge()를 새로 만든 클래스로 옮긴다(함수 옮기기)
+
+```js
+//Reading 클래스...
+// highlight-next-line
+get calculateBaseCharge() {
+  return baseRate(this.month, this.year) * this.quantity;
+}
+```
+
+```js
+//클라이언트 3
+const rawReading = acquireReading();
+const aReading = new Reading(rawReading);
+// highlight-next-line
+const basicChargeAmount = aReading.calculateBaseCharge;
+```
+
+이 과정에서 메서드 이름을 원하는대로 바꾼다(함수 이름 바꾸기)
+
+```js
+// highlight-next-line
+get baseCharge() {
+  return baseRate(this.month, this.year) * this.quantity;
+}
+```
+
+```js
+const rawReading = acquireReading();
+const aReading = new Reading(rawReading);
+// highlight-next-line
+const basicChargeAmount = aReading.baseCharge;
+```
+
+이제 첫 번째, 두 번째 클라이언트에서 중복된 계산 코드를 고쳐 앞의 메서드를 호출하게 한다.
+
+```js
+//클라이언트 1...
+const rawReading = acquireReading();
+const aReading = new Reading(rawReading);
+// highlight-next-line
+const baseCharge = aReading.baseCharge;
+```
+
+```js
+//클라이언트 2...
+const rawReading = acquireReading();
+const aReading = new Reading(rawReading);
+// highlight-next-line
+const taxableCharge = Math.max(0, aReading.baseCharge - taxThreshold(aReading.year));
+```
+
+3. 세금을 부과할 소비량을 계산하는 코드를 함수로 추출한다.
+
+```js
+// highlight-next-line
+function taxableChargeFn(aReading) {
+    return Math.max(0, aReading.baseCharge - taxThreshold(aReading.year));
+}
+```
+
+```js
+//클라이언트 3...
+const rawReading = acquireReading();
+const aReading = new Reading(rawReading);
+// highlight-next-line
+const taxableCharge = taxableChargeFn(aReading);
+```
+
+방금 추출한 함수를 Reading 클래스로 옮긴다(함수 옮기기)
+
+```js
+//Reading 클래스...
+// highlight-next-line
+get taxableCharge() {
+  return Math.max(0, this.baseCharge - taxThreshold(this.year));
+}
+```
+
+```js
+//클라이언트 3...
+const rawReading = acquireReading();
+const aReading = new Reading(rawReading);
+// highlight-next-line
+const taxableCharge = aReading.taxableCharge;
+```
+
+## 6-10 여러 함수를 변환 함수로 묶기
+
+### 배경
+
+데이터를 입력 받아 여러 가지 정보를 도출하는데, 이렇게 도출된 정보는 여러 곳에서 사용될 수 있다.
+그러다보면 이 정보가 사용되는 곳마다 같은 도출 로직이 반복되기도 한다. 도출 작업들을 한데로 모아두면,
+
+1. 검색과 갱신을 일관된 장소에서 처리할 수 있다.
+2. 로직 중복도 막을 수 있다.
+
+이렇게 하기 위한 방법으로 **변환 함수**를 사용할 수 있다.
+변환 함수는 원본 데이터를 입력받아서 필요한 정보를 모두 도출한 뒤, 각각을 출력 데이터의 필드에 넣어 반환한다.
+이렇게 해두면 도출 과정을 검토할 일이 생겼을 때 반환 함수만 살펴보면 된다.
+
+### 절차
+
+1. 변환할 레코드를 입력받아서 값을 그대로 반환하는 변환 함수를 만든다.
+2. 묶을 함수 중 함수 하나를 골라서 본문 코드를 변환 함수로 옮기고, 처리 결과를 레코드에 새 필드로 기록한다. 그런 다음 클라이언트가 이 필드를 사용하도록 수정한다.
+3. 테스트한다.
+4. 나머지 관련 함수도 위 과정에 따라 처리한다.
+
+### 예시
+
+```js
+reading = { customer: "ivan", quantity: 10, month: 5, year: 2017 };
+```
+
+```js
+//클라이언트 1...
+const aReading = acquireReading();
+const baseCharge = baseRate(aReading.month, aReading.year) * aReading.quantity;
+```
+
+```js
+//클라이언트 2...
+const aReading = acquireReading();
+const base = baseRate(aReading.month, aReading.year) * aReading.quantity;
+const taxableCharge = Math.max(0, base - taxThreshold(aReading.year));
+```
+
+이 코드에서 이와 같은 계산 코드가 여러 곳에서 반복된다고 하면 함수 추출로 처리한다고 하더라도, 추출한 함수들이 프로그램 곳곳에 흩어져서 나중에 프로그래머가 그런 함수가 있는지조차 모르게 될 가능성이 있다.
+
+```js
+const aReading = acquireReading();
+const basicChargeAmount = calculateBaseCharge(aReading);
+
+//다른 곳에서 이미 함수로 만들어둠
+function calculateBaseCharge(aReading) {
+    return baseReate(aReading.month, aReading.year) * aReading.quantity;
+}
+```
+
+### 결과
+
+```js
+{
+   baseCharge : //some value
+   taxableCharge : //other value
+}
+
+function enrichReading(aReading) {
+  //...
+}
+
+//클라이언트 1...
+const baseCharge = enrichReading(aReading).baseCharge
+
+//클라이언트 2...
+const taxableCharge = enrichReading(aReading).taxableCharge
+
+//클라이언트 3...
+const basicChargeAmount = enrichReading(aReading).baseCharge
+```
+
+<br />
+이를 해결하기 위해, 하나의 변환 단계로 모아보자.
+<br />
+1. 입력 객체를 그대로 복사해 반환하는 변환 함수를 만든다.
+
+```js
+function enrichReading(original) {
+    const result = _.cloneDeep(original);
+    return result;
+}
+```
+
+2. 변경하려는 계산 로직 중 하나를 고른다. 이 계산 로직에 측정값을 전달하기 전에 부가 정보를 덧붙이도록 수정한다.
+
+```js
+//클라이언트 3...
+// highlight-next-line
+const rawReading = acquireReading(); //미가공 측정값
+// highlight-next-line
+const aReading = enrichReading(rawReading);
+const basicChargeAmount = calculateBaseCharge(aReading);
+```
+
+calculateBaseCharge()를 부가 정보를 덧붙이는 코드 근처로 옮긴다(함수 옮기기)
+
+```js
+//클라이언트 3...
+fnction enrichReading(original) {
+  const result = _.cloneDeep(original);
+  // highlight-next-line
+  result.baseCharge = calculateBaseCharge(result); //미가공 측정값에 기본 소비량을 부가 정보로 덧붙임
+  return result;
+}
+```
+
+이 함수를 사용하던 클라이언트가 부가 정보를 담은 필드를 사용하도록 수정한다.
+
+```js
+//클라이언트 3...
+const rawReading = acquireReading();
+const aReading = enrichReading(rawReading);
+const basicChargeAmount = aReading.baseCharge;
+}
+```
+
+calculateBaseCharge()를 호출하는 코드를 수정한 뒤, 이 함수를 enrichReading()안에 중첩시킬 수 있다. 그러면 '기본요금을 이용하는 클라이언트는 변환된 레코드를 사용해야한다'는 의도를 명확히 표현할 수 있다.
+여기서, enrichReading()처럼 정보를 추가해 반환할 때 원본 측정값 레코드는 변경하지 않아야 한다. 따라서 이를 확인하는 테스트를 작성해두는 것이 좋다.
+
+```js
+it("check reading unchanged", function () {
+    const baseReading = { customer: "ivan", quantity: 15, month: 5, year: 2017 };
+    const oracle = _.cloneDeep(baseReading);
+    enrichReading(baseReading);
+    assert.deepEqual(baseReading, oracle);
+});
+```
+
+```js
+//클라이언트 1...
+const rawReading = acquireReading();
+const aReading = enrichReading(rawReading);
+// highlight-next-line
+const baseCharge = aReading.baseCharge;
+```
+
+4. 세금을 부과할 소비량 계산으로, 가장 먼저 변환 함수부터 끼워 넣는다.
+
+```js
+const rawReading = acquireReading();
+// highlight-next-line
+const aReading = enrichReading(rawReading);
+const base = baseRate(aReading.month, aReading.year) * aReading.quantity;
+const taxableCharge = Math.max(0, base - taxThreshold(aReading.year));
+```
+
+```js
+const rawReading = acquireReading();
+const aReading = enrichReading(rawReading);
+// highlight-next-line
+const base = aReading.baseCharge;
+const taxableCharge = Math.max(0, base - taxThreshold(aReading.year));
+```
+
+```js
+const rawReading = acquireReading();
+const aReading = enrichReading(rawReading);
+const base = aReading.baseCharge;
+// highlight-next-line
+const taxableCharge = Math.max(0, aReading.baseCharge - taxThreshold(aReading.year));
+```
+
+계산 코드를 변환 함수로 옮긴다.
+
+```js
+function enrichReading(original) {
+    const result = _.cloneDeep(original);
+    result.baseCharge = calculateBaseCharge(result);
+    // highlight-next-line
+    result.taxableCharge = Math.max(0, result.baseCharge - taxThreshold(result.year));
+    return result;
+}
+```
+
+새로 만든 필드를 사용하도록 원본 코드를 수정한다.
+
+```js
+const rawReading = acquireReading();
+const aReading = enrichReading(rawReading);
+// highlight-next-line
+const taxableCharge = aReading.taxableCharge;
+```
+
+이 리팩터링 대신 **여러 함수를 클래스로 묶기**로 처리해도 된다. <br />둘 중 어느 것을 적용해도 좋으며, 둘 사이에는 중요한 차이가 하나 있다.
+**원본 데이터가 코드 안에서 갱신될 때**는 클래스로 묶는 편이 훨씬 낫다.
+변환 함수로 묶으면 가공한 데이터를 새로운 레코드에 저장하므로, 원본 데이터가 수정되면 일관성이 꺠질 수 있기 때문이다.
+
+### 클래스 vs 변환함수
+
+-   목적은 같다 : 연관된 데이터를 다루는 함수들을 하나로 묶는 것
+-   그러나 방법은 다르다 : 클래스는 데이터와 함수들을 묶어주는 것이고, 변환함수는 여러 함수들을 모아서 결과값을 하나로 모은 객체를 리턴
+
+## 6-11 단계 쪼개기
+
+### 배경
+
+서로 다른 두 대상을 한꺼번에 다루는 코드는 각각을 별개 모듈로 나눈다.<br />
+이는 동작을 연이은 두 단계로 쪼갤 수 있다. 여러 단계로 분리하면 좋을만한 코드를 발견할 때마다 기본적인 단계 쪼개기 리팩터링을 한다.
+다른 단계로 볼 수 있는 코드 영역들이 마침 서로 다른 데이터와 함수를 사용한다면 단계 쪼개기에 적합하다는 뜻이다.
+
+### 절차
+
+1. 두 번째 단계에 해당하는 코드를 독립 함수로 추출한다.
+2. 테스트한다.
+3. 중간 데이터 구조를 만들어서 앞에서 추출한 함수의 인수로 추가한다.
+   4 테스트한다.
+4. 추출한 두 번째 단계 함수의 매개변수를 하나씩 검토한다. 그 중 첫 번째 단계에서 사용되는 것은 중간 데이터 구조로 옮긴다.
+   하나씩 옮길 때마다 테스트한다.
+5. 첫 번째 단계 코드를 함수로 추출하면서 중간 데이터 구조를 반환하도록 만든다.
+
+### 예시
+
+다음은 상품의 결제 금액을 계산하는 코드이다.
+
+```js
+function priceOrder(product, quantity, shippingMethod) {
+    const basePrice = product.basePrice * quantity;
+    const discount = Math.max(quantity - product.discountThreshold, 0) * product.basePrice * product * discountRate;
+    const shippingPerCase =
+        basePrice > shippingMethod.discountThreshold ? shippingMethod.discountFee : shippingMethod.feePerCase;
+    const shippingCost = quantity * shippingPerCase;
+    const price = basePrice - discount + shippingCost;
+    return price;
+}
+```
+
+<br />
+
+-   계산이 두 단계로 이뤄짐을 알 수 있다.
+    <br />
+    위에서 두 개의 값 basePrice, discount는 여기서 생성되는 값이지만 이 값들을 아래로 던져줘서 사용하기 때문에 이를 기점으로
+    위 아래로 구분할 수 있다. 상품 정보를 이용해서 결제 금액 중 상품 가격을 계산하는 부분과 배송 정보를 이용하여 결제 금액
+    중 배송비를 계산하는 부분으로 나눌 수 있는 것이다. 나중에 상품 가격과 계산을 더 복잡하게 만드는 변경이 생긴다면 비교적
+    서로 독립적으로 처리할 수 있으므로 이 코드는 두 단계로 나누는 것이 좋다.
+
+<br />
+1. 두 번째 단계에 해당하는 코드를 독립 함수로 호출한다 : 배송비 계산 부분을 함수로 추출한다.
+
+```js
+function priceOrder(product, quantity, shippingMethod) {
+    const basePrice = product.basePrice * quantity;
+    const discount = Math.max(quantity - product.discountThreshold, 0) * product.basePrice * product.discountRate;
+    // highlight-next-line
+    const price = applyShipping(basePrice, shippingMethod, quantity, discount);
+    return price;
+}
+
+// highlight-next-line
+//두 번째 단계를 처리하는 함수
+function applyShipping(basePrice, shippingMethod, quantity, discount) {
+    const shippingPerCase =
+        basePrice > shippingMethod.discountThreshold ? shippingMethod.discountedFee : shippingMethod.feePerCase;
+    const shippingCost = quantity * shippingPerCase;
+    const price = basePrice - discount + shippingCost;
+    return price;
+}
+```
+
+두 번째 단계에 필요한 데이터를 모두 개별 매개변수로 전달했다.
+
+3. 첫 번째 단계와 두 번째 단계가 주고받을 중간 데이터 구조를 만든다.
+
+```js
+function priceOrder(product, quantity, shippingMethod) {
+    const basePrice = product.basePrice * quantity;
+    const discount = Math.max(quantity - product.discountThreshold, 0) * product.basePrice * product.discountRate;
+    // highlight-next-line
+    const priceData = {}; //중간 데이터 구조
+    const price = applyShipping(priceData, basePrice, shippingMethod, quantity, discount);
+    return price;
+}
+
+// highlight-next-line
+function applyShipping(priceData, basePrice, shippingMethod, quantity, discount) {
+    const shippingPerCase =
+        basePrice > shippingMethod.discountThreshold ? shippingMethod.discountedFee : shippingMethod.feePerCase;
+    const shippingCost = quantity * shippingPerCase;
+    const price = basePrice - discount + shippingCost;
+    return price;
+}
+```
+
+5. applyShipping()에 전달되는 다양한 매개변수를 보면, 이중 basePrice는 첫 번째 단계를 수행하는 코드에서 생성된다.
+   따라서 중간 데이터 구조를 옮기고 매개변수 목록에서 제거한다.
+
+```js
+function priceOrder(product, quantity, shippingMethod) {
+    const basePrice = product.basePrice * quantity;
+    const discount = Math.max(quantity - product.discountThreshold, 0) * product.basePrice * product.discountRate;
+// highlight-next-line
+const priceData = {basePrice: basePrice};
+// highlight-next-line
+const price = applyShipping(priceData, shippingMethod, quantity, discount);
+return price;
+}
+// highlight-next-line
+function applyShipping(priceData, shippingMethod, quantity, discount) {
+    const shippingPerCase =
+    // highlight-next-line
+        (priceData.basePrice > shippingMethod.discountThreshold ? shippingMethod.discountedFee : shippingMethod.feePerCase;
+    const shippingCost = quantity * shippingPerCase;
+    // highlight-next-line
+    const price = priceData.basePrice - discount + shippingCost;
+    return price;
+}
+```
+
+다음으로 shippingMethod를 보면, 이 매개변수는 첫 번째 단계에서는 사용하지 않으니 그대로 둔다.
+그 다음 나오는 quantity는 첫 번째 단계에서 사용하지만 거기서 생성된 것은 아니다. 그래서 그냥 매개변수로 놔둬도 된다.
+
+```js
+function priceOrder(product, quantity, shippingMethod) {
+    const basePrice = product.basePrice * quantity;
+    const discount = Math.max(quantity - product.discountThreshold, 0) * product.basePrice * product.discountRate;
+// highlight-next-line
+const priceData = {basePrice: basePrice, quantity: quantity};
+const price = applyShipping(priceData, shippingMethod, discount);
+return price;
+}
+
+function applyShipping(priceData, shippingMethod, discount) {
+    const shippingPerCase =
+        (priceData.basePrice > shippingMethod.discountThreshold ? shippingMethod.discountedFee : shippingMethod.feePerCase;
+    const shippingCost = priceData.quantity * shippingPerCase;
+    const price = priceData.basePrice - discount + shippingCost;
+    return price;
+}
+```
+
+discount 또한 같은 방법으로 처리한다.
+매개변수들을 모두 처리하면 중간 데이터 구조가 완성된다.
+
+6. 첫 번째 단계 코드를 함수로 추출하고 이 데이터 구조를 반환하게 된다.
+
+```js
+function priceOrder(product, quantity, shippingMethod) {
+// highlight-next-line
+const priceData = calculatePricingData(product, quantity);
+const price = applyShipping(priceData, shippingMethod);
+return price;
+}
+
+// highlight-next-line
+function calculatePricingData(product, quantity) { //첫 번째 단계를 처리하는 함수
+const basePrice = product.basePrice * quantity;
+const discount = Math.max(quantity - product.discountThreshold, 0) * product.basePrice * product.discountRate;
+return {basePrice: basePrice, quantity: quantity, discount:discount};
+}
+
+function applyShipping(priceData, shippingMethod) { //두 번째 단계를 처리하는 함수
+    const shippingPerCase =
+        (priceData.basePrice > shippingMethod.discountThreshold ? shippingMethod.discountedFee : shippingMethod.feePerCase;
+    const shippingCost = priceData.quantity * shippingPerCase;
+    const price = priceData.basePrice - priceData.discount + shippingCost;
+    return price;
+}
+```
+
+최종적으로 결과를 담은 상수들(price) 또한 정리해준다.
+
+```js
+function priceOrder(product, quantity, shippingMethod) {
+const priceData = calculatePricingData(product, quantity);
+// highlight-next-line
+return applyShipping(priceData, shippingMethod);
+}
+
+function calculatePricingData(product, quantity) {
+const basePrice = product.basePrice * quantity;
+const discount = Math.max(quantity - product.discountThreshold, 0) * product.basePrice * product.discountRate;
+return {basePrice: basePrice, quantity: quantity, discount:discount};
+}
+
+function applyShipping(priceData, shippingMethod) {
+    const shippingPerCase =
+        (priceData.basePrice > shippingMethod.discountThreshold ? shippingMethod.discountedFee : shippingMethod.feePerCase;
+    const shippingCost = priceData.quantity * shippingPerCase;
+    // highlight-next-line
+    return priceData.basePrice - priceData.discount + shippingCost;
+}
+```
