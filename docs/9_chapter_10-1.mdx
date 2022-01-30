@@ -1,0 +1,773 @@
+---
+sidebar_position: 1
+---
+
+import Authors from "./Authors.tsx";
+
+# 10장 조건부 로직 간소화 上
+
+<Authors bookLeader="saengmotmi" />
+
+프로그래밍은 조금 단순하게 요약 하자면 `조건과 반복의 집합`이라고 할 수 있다. 그만큼 조건문은 프로그래밍을 함에 있어 필수불가결한 요소다.
+
+하지만 `'로직을 구조로 표현하라'`는 격언 등을 생각해보아도 조건문은 까다로운 존재다. 무작정 생각의 흐름대로 코드를 작성하지 말라는 것이다. 저자 또한 조건문을 잘못 사용하면 코드는 쉽게 지저분해질 수 있다고 경고한다.
+
+이번 장에서는 조건문을 알맞게 다루는 몇 가지 기법에 대해서 알아볼 것이다.
+
+## 10-1 조건문 분해하기
+
+### 배경
+
+조건문은 문장의 복잡도를 높인다. 조건이 다양하게 달릴 수록 프로그램은 다양한 경우에 대해 대응할 수 있지만, 경우가 다양해질 수록 그 코드를 읽어야 하는 사람 입장은 점점 어려워진다.
+
+이는 코드가 어떤 조건을 검사하고 어떤 동작이 일어나는지는 표현해주지만(`구현 - How`), 그 동작이 왜(`내용 - What`) 일어나는지를 알려주지 않기 때문이다. 이는 변수명이나 함수명을 지을 때 '어떻게' 보다 '무엇을' 나타내는지에 신경써야 한다고 역설했던 것과 큰 의미에서는 다르지 않다. 결국 리팩터링은 코드의 가독성을 높이기 위한 작업이니까.
+
+코드가 점차 거대해지는 것 또한 일반론적으로 따져볼 수 있는 문제다. `분할 - 정복`의 정신에 따라 작은 코드로 나누어주자. `함수 추출하기(6.1)`의 한 사례로 볼 수도 있다. 저자는 10.1이 중요하기도 하거니와 6.1의 좋은 연습이기도 하여 별도의 챕터로 넣었다고 설명했다.
+
+즉, 거대한 코드 블록에 대해서 각 부분을 의미를 살린 이름을 지어 함수로 만드는 식으로 코드를 개선해 볼 수 있다. 이러한 개선을 통해 분기 조건의 의미를 강조하고 조건이 뚜렷해짐에 따라서 무엇을 분기했는지 알아보기 쉬워진다.
+
+### 절차
+
+1. 조건식과 그 조건식에 딸린 조건절을 각각의 함수로 추출한다.
+
+### 예시
+
+여름철에 다른 할인율을 적용하는 서비스의 요금을 계산한다고 해보자.
+
+```js
+if (!aDate.isBefore(plan.summerStart) && !aDate.isAfter(plan.summerEnd)) {
+  // 여름철
+  charge = quantity * plan.summerRate;
+} else {
+  // 일반
+  rate = plan.regularRate + plan.regularServiceCharge;
+}
+```
+
+일단 위 코드에서 조건 부분만 별도 함수로 추출하면 아래와 같이 수정할 수 있다. 조건이 만족했을 때와 그렇지 않았을 때의 로직도 함께 추출해주자.
+
+조건을 변수로 만들어도 되지 않을까 싶기는 한데, 함수로 만들면 구현을 안쪽으로 숨겨 분리할 수 있다는 장점 정도로 생각하고 넘어가려고 한다.
+
+```js
+if (summer()) {
+  // 여름철
+  charge = summerCharge();
+} else {
+  // 일반
+  rate = regularCharge();
+}
+
+function summer() {
+  return !aDate.isBefore(plan.summerStart) && !aDate.isAfter(plan.summerEnd);
+}
+
+function summerCharge() {
+  return quantity * plan.summerRate;
+}
+
+function regularCharge() {
+  return plan.regularRate + plan.regularServiceCharge;
+}
+```
+
+취향에 따라 아래와 같이 삼항연산자로 바꿔줄 수도 있다.
+
+```js
+summer() ? summerCharge() : regularCharge();
+```
+
+## 10-2 조건식 통합하기
+
+### 배경
+
+비교 조건은 다르지만 그 결과 수행하는 동작은 똑같은 코드가 있을 수 있다. 어차피 같은 일을 할거라면 조건 검사도 하나로 통합하는게 낫다. 이럴 때는 비교 연산자(AND, OR)를 사용하여 여러 개의 비교 로직을 합쳐준다.
+
+당연한 이야기지만 의의를 찾아보자면 다음과 같다.
+
+- 여러 조각으로 나뉜 조건을 통합하여 코드의 의도가 보다 명확해진다.
+- 이 작업을 하고 나서 `함수 추출하기(6.1)` 까지 이어질 가능성이 높다.
+
+물론 하나의 독립된 동작이라고 생각할 수 없는 경우에는 조건문을 억지로 하나로 통합하지 말아야 한다.
+
+### 절차
+
+1. 해당 조건식들 모두에 부수효과가 없는지 확인한다 > 부수 효과가 있는 조건식들에는 `질의 함수와 변경 함수 분리하기(11.1)`를 먼저 적용한다.
+2. 조건문 두 개를 선택하여 두 조건문의 조건식들을 논리 연산자로 결합한다.
+3. 테스트한다.
+4. 조건이 하나만 남을 때까지 반복한다.
+5. 하나로 합쳐진 조건식을 함수로 추출(6.1)할지 고려해본다.
+
+### 예시
+
+장애 수당을 계산하는 함수가 있다. 이 함수는 장애 수당을 계산하기 전 세 가지 조건을 검사하고, 이에 해당할 경우 0을 리턴하고 있다.
+
+```js
+function disabilityAmount(anEmployee) {
+  if (anEmployee.seniority < 2) return 0;
+  if (anEmployee.monthDisabled > 12) return 0;
+  if (anEmployee.isPartTime) return 0;
+  // 장애 수당 계산
+}
+```
+
+조건 검사는 3가지 인데 그 결과 리턴하는 값은 0으로 모두 동일하다. 동일한 검사로 간주하고 하나의 식으로 통합해볼 수 있다.
+
+```js
+function disabilityAmount(anEmployee) {
+  if (
+    anEmployee.seniority < 2 ||
+    anEmployee.monthDisabled > 12 ||
+    anEmployee.isPartTime
+  )
+    return 0;
+  // 장애 수당 계산
+}
+```
+
+조건이 통합되었다면 최종 조건식을 함수로 추출한다.
+
+```js
+function disabilityAmount(anEmployee) {
+  if (isNotEligibleForDisability()) return 0;
+  // 장애 수당 계산
+}
+
+function isNotEligibleForDisability() {
+  // 장애 수당 적용 여부 확인
+  return (
+    anEmployee.seniority < 2 ||
+    anEmployee.monthDisabled > 12 ||
+    anEmployee.isPartTime
+  );
+}
+```
+
+## 10-3 중첩 조건문을 보호 구문으로 바꾸기
+
+### 배경
+
+조건문은 주로 다음과 같은 두 가지 형태로 쓰인다.
+
+- 참인 경로 / 거짓인 경로 모두 정상 동작으로 이어질 때
+- 한 쪽만 정상 동작으로 이어질 때
+
+저자는 첫 번째 경우처럼 둘 다 정상 종작으로 이어질 경우 `if - else` 구문을 사용하고, 한쪽만 정상이라면 비정상 조건만 `if`로 처리한 다음 함수를 종료하라고 권장한다. 이를 흔히 `보호 구문(guard clause)`라고 부른다.
+
+### 절차
+
+1. 교체해야 할 조건 중 가장 바깥 것을 선택하여 보호 구문으로 바꾼다.
+2. 테스트한다.
+3. 위 과정을 반복한다.
+4. 모든 보호 구문이 같은 결과를 반환한다면 보호 구문들의 조건식을 통합(10.2 - 조건식 통합하기)한다.
+
+### 예시
+
+아래 코드는 급여를 계산하는 로직이다. 함수의 이름에서도 유추할 수 있듯이 이 함수의 목적은 급여를 계산하는 것이다.
+
+하지만 퇴사, 은퇴 여부를 가리는 중첩된 조건들 때문에 함수의 주 목적을 실행하는 코드가 잘 보이지 않는다.
+
+```js
+function payAmount(employee) {
+  let result;
+  if (employee.isSeperated) {
+    // 퇴사한 직원인가?
+    result = { amount: 0, reasonCode: "SEP" };
+  } else if (employee.isRetired) {
+    // 은퇴한 직원인가?
+    result = { amount: 0, reasonCode: "RET" };
+  } else {
+    // 급여 계산 로직
+    calculatePayAmount(employee);
+  }
+}
+```
+
+이를 보호 구문으로 바꿔보자.
+
+```js
+function payAmount(employee) {
+  if (employee.isSeperated) return { amount: 0, reasonCode: "SEP" };
+  if (employee.isRetired) return { amount: 0, reasonCode: "RET" };
+
+  // 급여 계산 로직
+  calculatePayAmount(employee);
+}
+```
+
+변경 하고 나니 가변 변수인 `result`는 아무 일도 하지 않게 되었으므로 삭제해주자.
+
+종종 조건식의 Boolean 방향을 뒤집어 적용하는 경우도 있을 수 있다.
+
+```js
+function adjustedCapital(anInstrument) {
+  let result = 0;
+  if (anInstrument.capital.length > 0) {
+    if (anInstrument.interestRate > 0 && anInstrument.duration > 0) {
+      result =
+        (anInstrument.income / anInstrument.duration) *
+        anInstrument.adjustmentFactor;
+    }
+  }
+
+  return result;
+}
+```
+
+일단 위에서 배운대로 보호 구문을 추가해보자. 이 경우 보호 구문을 적용하기 위해서는 기존 조건식의 참 / 거짓 방향을 반대로 틀어야 한다.
+
+```js
+function adjustedCapital(anInstrument) {
+  let result = 0;
+  // highlight-next-line
+  if (anInstrument.capital.length <= 0) return result;
+  // highlight-next-line
+  if (!(anInstrument.interestRate > 0 && anInstrument.duration > 0))
+    return result;
+
+  return (result =
+    (anInstrument.income / anInstrument.duration) *
+    anInstrument.adjustmentFactor);
+
+  return result;
+}
+```
+
+하지만 `!(NOT)` 연산자를 넣었더니 조건을 읽기 힘들다.
+
+이럴 때는 [드 모르간의 법칙](https://ko.wikipedia.org/wiki/%EB%93%9C_%EB%AA%A8%EB%A5%B4%EA%B0%84%EC%9D%98_%EB%B2%95%EC%B9%99)을 사용해 반대 연산자를 풀어주자. 별거 아니다. 그냥 조건을 뒤집어서 풀어주는거다.
+
+```js
+function adjustedCapital(anInstrument) {
+  let result = 0;
+  if (anInstrument.capital.length <= 0) return result;
+  // highlight-next-line
+  if (anInstrument.interestRate <= 0 || anInstrument.duration <= 0)
+    return result;
+
+  // 생략
+}
+```
+
+마지막으로 같은 결과를 내는 보호 구문을 통합해보자. 통합 하고 나면 가변 변수인 result가 사용되지 않음을 알 수 있다. 제거해주면 된다.
+
+```js
+function adjustedCapital(anInstrument) {
+  if (
+    anInstrument.capital.length <= 0 ||
+    anInstrument.interestRate <= 0 ||
+    anInstrument.duration <= 0
+  )
+    return 0;
+
+  // 생략
+}
+```
+
+## 10-4 조건부 로직을 다형성으로 바꾸기
+
+### 배경
+
+서두에서 `'로직을 구조로 표현하라'`라는 문장을 소개한 적이 있다. 개인적으로는 이 문장을 곱씹게 된 후로 이전 보다는 간결하고도 사용하기 좋은 코드에 대한 관점이 생기게 되었던 것 같다.
+
+이번에 소개하고자 하는 기법도 이와 같은 맥락이라고 볼 수 있다. 저자는 종종 조건부 로직을 더 높은 수준의 개념을 도입해 해결할 수 있다고 한다. 바로 `클래스`와 `다형성`이다.
+
+타입에 따라 여러 가지 조건부 로직이 있고, 각 타입에 맞는 조건부 로직을 구성할 수 있다. 예를 들면, 책, 음악, 음식은 각기 다른 요소이므로 다르게 처리해야 한다. 이런 상황에서는 특히 하나의 함수가 아니라 여러 가지 함수에서 각 타입에 따른 분기가 일어나고 있을 수 있다. 만약 각 case 별로 클래스를 만들면 조건문 분기의 중복을 없앨 수 있다. 각 타입에 맞는 동작을 각 타입이 알아서 처리하도록 하는 것이다.
+
+또 다른 예로 기본 동작과 변형 동작으로 구성된 로직이 있다고 가정해보자. 이 경우에도 다형성을 도입해볼 수 있다. 공통 로직은 슈퍼클래스로 두고 기본에 집중하도록 한다. 변형 동작은 서브클래스로 넣고, 기본 동작과의 차이만을 표현하는 코드로 채울 수 있다.
+
+### 절차
+
+1. 다형적 동작을 표현하는 클래스들이 아직 없다면 만들어준다. 이왕이면 적합한 인스턴스를 알아서 만들어 반환하는 `팩터리 함수`도 함께 만든다.
+2. 호출하는 코드에서 팩터리 함수를 사용하게 한다.
+3. 조건부 로직 함수를 슈퍼클래스로 옮긴다. > 조건부 로직이 온전한 함수로 분리되어 있지 않다면 먼저 `함수로 추출(6.1)`한다.
+4. 서브클래스 중 하나를 선택한다. 서브클래스에서 슈퍼클래스의 조건부 로직 메서드를 오버라이드한다. 조건부 문장 중 선택된 서브클래스에 해당하는 조건절을 서브클래스 메서드로 복사한 다음 적절히 수정한다.
+5. 같은 방식으로 각 조건절을 해당 서브클래스에서 메서드로 구현한다.
+6. 슈퍼클래스 메서드에는 기본 동작 부분만 남긴다. 혹은 슈퍼클래스가 추상 클래스여야 한다면, 이 메서드를 추상으로 선언하거나 서브클래스에서 처리해야 함을 알리는 에러를 던진다.
+
+### 예시
+
+#### 예시 1) 새의 종류에 따른 비행 속도, 깃털 상태 알려주는 프로그램
+
+다양한 새를 키우는 친구가 새의 종에 따른 비행 속도와 깃털 상태를 알고 싶어한다. 이 친구를 위해 간단한 프로그램을 짜주었다.
+
+```js
+function plumges(birds) {
+  return new Map(birds.map((b) => [b.name, plumge(b)]));
+}
+
+function speeds(birds) {
+  return new Map(birds.map((b) => [b.name, airSpeedVelocity(b)]));
+}
+
+function plumge(bird) {
+  switch (bird.type) {
+    case "유럽 제비":
+      return "보통이다";
+    case "아프리카 제비":
+      return bird.numberOfCoconuts > 2 ? "지쳤다" : "보통이다";
+    case "노르웨이 파랑 앵무":
+      return bird.voltage > 100 ? "그을렸다" : "예쁘다";
+    default:
+      return "알수 없다";
+  }
+}
+
+function airSpeedVelocity(bird) {
+  switch (bird.type) {
+    case "유럽 제비":
+      return "보통이다";
+    case "아프리카 제비":
+      return 40 - 2 * bird.numberOfCoconuts;
+    case "노르웨이 파랑 앵무":
+      return bird.isNailed ? 0 : 10 + bird.voltage / 10;
+    default:
+      return null;
+  }
+}
+```
+
+새 종류에 따라 다르게 동작하는 함수들을 확인할 수 있다. 새 종류별로 클래스를 만들어서 각각에 맞는 동작을 표현해보자.
+
+가장 먼저 `airSpeedVelocity()` 와 `plumge()`를 `Bird` 라는 클래스로(`여러 함수를 클래스로 묶기 - 6.9`) 묶자.
+
+```js
+function plumge(bird) {
+  return new Bird(bird).plumge;
+}
+
+function airSpeedVelocity(bird) {
+  return new Bird(bird).airSpeedVelocity;
+}
+
+class Bird {
+  constructor(birdObject) {
+    Object.assign(this, birdObject);
+  }
+
+  get plumge() {
+    // ...
+  }
+
+  get airSpeedVelocity() {
+    // ...
+  }
+}
+```
+
+슈퍼클래스를 만들었으니 이제 종별 서브클래스를 만들 차례다. 서브클래스를 만들 때 새의 타입에 알맞은 인스턴스를 만들어 줄 팩터리 함수도 같이 만들어준다.
+
+```js
+function plumge(bird) {
+  return createBird(bird).plumge;
+}
+
+function airSpeedVelocity(bird) {
+  return createBird(bird).airSpeedVelocity;
+}
+
+function createBird(bird) {
+  switch (bird.type) {
+    case "유럽 제비":
+      return new EuropeanSwallow(bird);
+    case "아프리카 제비":
+      return new AfricanSwallow(bird);
+    case "노르웨이 파랑 앵무":
+      return new NorwegianSwallow(bird);
+    default:
+      return new Bird(bird);
+  }
+}
+
+class EuropeanSwallow extends Bird {}
+class AfricanSwallow extends Bird {}
+class NorwegianSwallow extends Bird {}
+```
+
+각 메서드 별로 switch 문의 절 하나씩을 대체할 수 있도록 해당 서브클래스에서 오버라이드 해준다. 서브 클래스에서 오버라이드 하기 때문에, 슈퍼클래스에서는 오류를 던져주도록 하자.
+
+```js
+// EuropeanSwallow 클래스
+get plumge() {
+  return "보통이다"
+}
+
+// Bird 클래스
+get plumge() {
+  switch (this.type) {
+    case '유럽 제비':
+      throw "오류 발생"
+    // 중략
+  }
+}
+```
+
+이와 같은 방식으로 모든 메서드와 서브클래스를 리팩터링 해준다. 다음은 최종 결과물이다.
+
+결과만 놓고 보면 기존에 존재했던 슈퍼클래스인 `Bird`는 불필요해졌다. 다만 저자는 이 경우 세 서브클래스의 맥락을 잘 설명해주므로 남겨두는 것이 좋다고 설명하고 있다.
+
+```js
+function plumges(birds) {
+  return new Map(
+    birds.map((b) => createBird(b)).map((bird) => [bird.type, bird.plumge])
+  );
+}
+
+function speeds(birds) {
+  return new Map(
+    birds
+      .map((b) => createBird(b))
+      .map((bird) => [bird.type, bird.airSpeedVelocity])
+  );
+}
+
+function createBird(bird) {
+  // 중략
+}
+
+class Bird {
+  constructor(birdObject) {
+    Object.assign(this, birdObject);
+  }
+
+  get plumge() {
+    return "알 수 없다";
+  }
+
+  get airSpeedVelocity() {
+    return null;
+  }
+}
+
+class EuropeanSwallow extends Bird {
+  // 중략
+}
+class AfricanSwallow extends Bird {
+  // 중략
+}
+class NorwegianSwallow extends Bird {
+  // 중략
+}
+```
+
+#### 예시 2) 변형 동작을 다형성으로 표현하기
+
+##### 주의) 이번 예시는 '절차'의 과정과 상당히 다르게 진행됨.
+
+앞의 예시는 계층 구조가 정확히 새의 종 분류에 맞게 구성되었다. 하지만 상속이 이렇게만 쓰이는 것은 아니다. 거의 똑같은 객체지만 다른 부분도 있음을 표현할 때도 상속을 사용할 수도 있다.
+
+신용 평가 기관에서 선박의 항해 투자 등급을 계산하는 예시를 들어보자. 평가 기관은 위험요소와 잠재 수익에 영향을 주는 다양한 요인을 기초로 항해 등급을 'A', 'B'로 나눈다. 위험요소로는 항해 경로의 자연조건과 선장의 항해 이력을 고려한다.
+
+일단 아래와 같은 코드로 시작한다.
+
+```js
+// 함수 호출부
+const voyage = { zone: "서인도", length: 10 };
+const history = [
+  { zone: "동인도", profit: 5 },
+  { zone: "서인도", profit: 15 },
+  { zone: "중국", profit: -2 },
+  { zone: "서아프리카", profit: 7 },
+];
+
+const myRating = rating(voyage, history);
+```
+
+```js
+// 투자 등급 - 메인 함수
+function rating(voyage, history) {
+  const vpf = voyageProfitFactor(voyage, history);
+  const vr = voyageRisk(voyage);
+  const chr = captainHistoryRisk(voyage, history);
+  if (vpf * 3 > vr + chr * 2) return "A";
+  else return "B";
+}
+
+// 항해 경로 위험요소
+function voyageRisk(voyage) {
+  let result = 1;
+  if (voyage.length > 4) result += 2;
+  if (voyage.length > 8) result += voyage.length - 8;
+  if (["중국", "동인도"].includes(voyage.zone)) result += 4;
+  return Math.max(result, 0);
+}
+
+// 선장의 항해 이력 위험요소
+function captainHistoryRisk(voyage, history) {
+  let result = 1;
+  if (history.length < 5) result += 4;
+  result += history.filter((v) => v.profit < 0).length;
+  // highlight-next-line
+  if (voyage.zone === "중국" && hasChina(history)) result -= 2;
+  return Math.max(result, 0);
+}
+
+// 수익 요인
+function voyageProfitFactor(voyage, history) {
+  let result = 2;
+  if (voyage.zone === "중국") result += 1;
+  if (voyage.zone === "동인도") result += 1;
+  // highlight-next-line
+  if (voyage.zone === "중국" && hasChina(history)) {
+    result += 3;
+    if (history.length > 10) result += 1;
+    if (voyage.length > 12) result += 1;
+    if (voyage.length > 18) result -= 1;
+  } else {
+    if (history.length > 8) result += 1;
+    if (voyage.length > 14) result -= 1;
+  }
+  return result;
+}
+
+function hasChina(history) {
+  // 중국을 경유하는가?
+  return history.some((v) => "중국" === v.zone);
+}
+```
+
+위의 코드에서 중국까지 항해해본 선장이 중국을 경유해 항해할 때를 다루는 조건부 로직들을 주목해보자. 이는 일반적인 케이스로부터 분리된 특수한 케이스로 생각할 수 있고, 특수 상황을 처리하기 위해 `상속`과 `다형성`을 사용해볼 수 있다.
+
+그 전에 우선 세부 계산을 수행하는 함수를 먼저 처리해보자. 다형성을 적용하려면 먼저 클래스를 만들어야 한다. 이는 `여러 함수를 클래스로 묶기(6.9)`를 적용하여 처리할 수 있다.
+
+```js
+// 투자 등급 - 메인 함수
+function rating(voyage, history) {
+  return new Rating(voyage, history).value;
+}
+
+class Rating {
+  constructor(voyage, history) {
+    this.voyage = voyage;
+    this.history = history;
+  }
+
+  get value() {
+    const vpf = this.voyageProfitFactor();
+    const vr = this.voyageRisk();
+    const chr = this.captainHistoryRisk();
+    if (vpf * 3 > vr + chr * 2) return "A";
+    else return "B";
+  }
+
+  get voyageRisk() {
+    let result = 1;
+    if (this.voyage.length > 4) result += 2;
+    if (this.voyage.length > 8) result += voyage.length - 8;
+    if (["중국", "동인도"].includes(this.voyage.zone)) result += 4;
+    return Math.max(result, 0);
+  }
+
+  get captainHistoryRisk() {
+    let result = 1;
+    if (this.history.length < 5) result += 4;
+    result += history.filter((v) => v.profit < 0).length;
+    // highlight-next-line
+    if (this.voyage.zone === "중국" && this.hasChinaHistory) result -= 2;
+    return Math.max(result, 0);
+  }
+
+  get voyageProfitFactor() {
+    let result = 2;
+    if (this.voyage.zone === "중국") result += 1;
+    if (this.voyage.zone === "동인도") result += 1;
+    // highlight-next-line
+    if (this.voyage.zone === "중국" && this.hasChinaHistory) {
+      result += 3;
+      if (this.history.length > 10) result += 1;
+      if (this.voyage.length > 12) result += 1;
+      if (this.voyage.length > 18) result -= 1;
+    } else {
+      if (this.history.length > 8) result += 1;
+      if (this.voyage.length > 14) result -= 1;
+    }
+    return result;
+  }
+
+  hasChinaHistory() {
+    return this.history.some((v) => "중국" === v.zone);
+  }
+}
+```
+
+여기까지는 기본 동작을 담당할 클래스를 생성했다. 이제 변형 동작을 담은 빈 서브클래스를 만들자.
+
+```js
+class ExperiencedChinaRating extends Rating {}
+```
+
+그리고 일반 클래스와 변형 클래스를 적절히 리턴해주는 팩터리 함수를 만든 다음, 생성자를 호출하는 코드를 모두 찾아 이 팩터리 함수를 대신 사용하도록 한다. 현재는 `rating()` 함수에서만 사용하고 있다.
+
+```js
+function createRating(voyage, history) {
+  if (voyage.zone === "중국" && history.some((v) => "중국" === v.zone))
+    return new ExperiencedChinaRating(voyage, history);
+  else return new Rating(voyage, history);
+}
+```
+
+이제 `Rating` 클래스에서 예외 동작을 서브클래스로 옮긴다. `captainHistoryRisk()` 안의 로직부터 시작한다. `Rating` 클래스(슈퍼클래스)의 메서드에 있던 조건문 내용을 `ExperiencedChinaRating` 클래스(서브클래스)로 자리를 옮긴다.
+
+슈퍼클래스의 메서드를 호출하기 위해 `super` 키워드를 사용하고 있음에 주목하자.
+
+```js
+// Rating 클래스
+get captainHistoryRisk() {
+  let result = 1;
+  if (this.history.length < 5) result += 4;
+  result += history.filter((v) => v.profit < 0).length;
+  return Math.max(result, 0);
+}
+```
+
+```js
+get captainHistoryRisk() {
+  // highlight-next-line
+  const result = super.captainHistoryRisk - 2
+  return Math.max(result, 0);
+}
+```
+
+`voyageProfitFactor()` 메서드를 분리하는 작업은 조금 더 까다롭다. `captainHistoryRisk()`가 단순히 기본 로직에 추가적으로 빼기 연산을 하는 경우였다면, `voyageProfitFactor()`는 다른 경로(`if - else`)가 존재하는 경우다.
+
+일단 해당 조건부 블록 전체를 `함수로 추출(6.1)`한다. 이를 `voyageAndHistoryLengthFactor()`라는 이름으로 임시로 분리하되, 서브클래스를 만들면 정리한다.
+
+```js
+// Rating 클래스
+get voyageProfitFactor() {
+  let result = 2;
+  if (this.voyage.zone === "중국") result += 1;
+  if (this.voyage.zone === "동인도") result += 1;
+
+  // highlight-next-line
+  result += this.voyageAndHistoryLengthFactor
+  return result
+}
+
+get voyageAndHistoryLengthFactor() {
+  // highlight-next-line
+  let result = 0;
+  if (this.voyage.zone === "중국" && this.hasChinaHistory) {
+    result += 3;
+    if (this.history.length > 10) result += 1;
+    if (this.voyage.length > 12) result += 1;
+    if (this.voyage.length > 18) result -= 1;
+  } else {
+    if (this.history.length > 8) result += 1;
+    if (this.voyage.length > 14) result -= 1;
+  }
+  return result;
+}
+```
+
+로직을 조건문을 기준으로 슈퍼클래스와 서브클래스로 각각 쪼개준다. 이렇게 하면 일단 원래 목적했던 슈퍼클래스와 서브클래스의 조건문은 분리된다.
+
+```js
+// Rating 클래스
+get voyageAndHistoryLengthFactor() {
+  let result = 0;
+  if (this.history.length > 8) result += 1;
+  if (this.voyage.length > 14) result -= 1;
+  return result;
+}
+```
+
+```js
+// ExperiencedChinaRating 클래스
+get voyageAndHistoryLengthFactor() {
+  let result = 3;
+  if (this.history.length > 10) result += 1;
+  if (this.voyage.length > 12) result += 1;
+  if (this.voyage.length > 18) result -= 1;
+  return result;
+}
+```
+
+이제 마지막으로 하나의 메서드(`voyageAndHistoryLengthFactor()`)로 묶어놨던 두 개의 동작을 분리하여 마무리해주자.
+
+다음은 리팩터링이 끝난 최종 코드다. 기존에 조건문으로 분기하던 부분은 팩터리 함수로 분리했다.
+
+```js
+function createRating(voyage, history) {
+  if (voyage.zone === "중국" && history.some((v) => "중국" === v.zone))
+    return new ExperiencedChinaRating(voyage, history);
+  else return new Rating(voyage, history);
+}
+```
+
+일단 기본 정책을 담고 있는 기본 정책을 담고 있는 `Rating` 클래스다.
+
+```js
+class Rating {
+  constructor(voyage, history) {
+    this.voyage = voyage;
+    this.history = history;
+  }
+
+  get value() {
+    const vpf = this.voyageProfitFactor();
+    const vr = this.voyageRisk();
+    const chr = this.captainHistoryRisk();
+    if (vpf * 3 > vr + chr * 2) return "A";
+    else return "B";
+  }
+
+  get voyageRisk() {
+    let result = 1;
+    if (this.voyage.length > 4) result += 2;
+    if (this.voyage.length > 8) result += voyage.length - 8;
+    if (["중국", "동인도"].includes(this.voyage.zone)) result += 4;
+    return Math.max(result, 0);
+  }
+
+  get captainHistoryRisk() {
+    let result = 1;
+    if (this.history.length < 5) result += 4;
+    result += history.filter((v) => v.profit < 0).length;
+    return Math.max(result, 0);
+  }
+
+  get voyageProfitFactor() {
+    let result = 2;
+    if (this.voyage.zone === "중국") result += 1;
+    if (this.voyage.zone === "동인도") result += 1;
+
+    result += this.historyLengthFactor;
+    result += this.voyageLengthFactor;
+    return result;
+  }
+
+  get voyageLengthFactor() {
+    return this.voyage.length > 14 ? -1 : 0;
+  }
+
+  get historyLengthFactor() {
+    return this.history.length > 8 ? 1 : 0;
+  }
+}
+```
+
+다음은 중국 항해 경험이 있을 때를 담당하는 `ExperiencedChinaRating` 클래스다. 기본 클래스와의 차이만 담고 있는 형태로 정리되었다.
+
+```js
+class ExperiencedChinaRating extends Rating {
+  get captainHistoryRisk() {
+    const result = super.captainHistoryRisk - 2;
+    return Math.max(result, 0);
+  }
+
+  get voyageLengthFactor() {
+    let result = 0;
+    if (this.voyage.length > 12) result += 1;
+    if (this.voyage.length > 18) result -= 1;
+    return result;
+  }
+
+  get historyLengthFactor() {
+    return this.history.length > 10 ? 1 : 0;
+  }
+
+  get voyageProfitFactor() {
+    return super.voyageProfitFactor + 3;
+  }
+}
+```
