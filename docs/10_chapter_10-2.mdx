@@ -1,0 +1,404 @@
+---
+sidebar_position: 1
+---
+
+import Authors from "./Authors.tsx";
+
+# 10장 조건부 로직 간소화 下
+
+<Authors bookLeader="saengmotmi" />
+
+## 10-5 특이 케이스 추가하기
+
+### 배경
+
+앞서 조건문이 코드를 복잡하게 만드는 경우에 대해 살펴봤는데, 다시 이러한 조건문을 불가피 하게 만드는 요소 중 하나가 바로 `특이 케이스` 혹은 `예외 케이스`다.
+
+로직을 작성하는 도중 발생하는 특이 케이스마다 `if - else`문을 사용해 분기해주다 보면 마구 엉켜 자라나는 나뭇가지처럼 지저분해지기 십상이다. 불상사가 발생하기 전에 적절한 기법을 사용하여 가지치기를 해주는 것이 좋다.
+
+특이 케이스의 발생 자체를 막을 수는 없겠지만, 만약 특이 케이스가 동일한 값을 리턴하는 방식으로 반응하고 있다면 여러 곳에 퍼져 있는 중복 코드를 모아 처리해주도록 할 수 있다.
+
+이 챕터에서 저자는 크게 3가지 케이스를 소개하고 있는데, 내 기준에서는 내용의 복잡성에 비해 설명이 너무 장황하다. 핵심만 잘 정리하여 전달할 수 있도록 설명 상 원문과 비교하여 약간의 각색을 가미한 부분은 양해 부탁바란다.
+
+### 절차
+
+> 이번 리팩터링의 대상이 될 속성을 담은 데이터 구조(혹은 클래스)에서 시작하자. 이 데이터 구조를 컨테이너라 하겠다. 컨테이너를 사용하는 코드에서는 해당 속성이 특이한 값인지를 검사한다. 우리는 이 대상이 가질 수 있는 값 중 특별하게 다뤄야 할 값을 특이 케이스 클래스(혹은 데이터 구조)로 대체하고자 한다.
+
+1. `컨테이너`에 특이 케이스인지를 검사하는 속성을 추가하고, `false`를 반환하게 한다.
+2. `특이 케이스 객체`를 만든다. 이 객체는 `특이 케이스인지를 검사하는 속성만 포함`하며, 이 속성은 `true`를 반환하게 한다.
+3. 클라이언트에서 특이 케이스인지를 검사하는 코드를 함수로 추출(6.1)한다. 모든 클라이언트가 값을 직접 비교하는 대신 방금 추출한 함수를 사용하도록 고친다.
+4. 코드에 새로운 특이 케이스 대상을 추가한다. 함수의 반환 값으로 받거나 변환 함수를 적용하면 된다.
+5. 특이 케이스를 검사하는 함수 본문을 수정하여 특이 케이스 객체의 속성을 사용하도록 한다.
+6. 테스트한다.
+7. 여러 함수를 클래스로 묶기(6.9)나 여러 함수를 변환 함수로 묶기(6.10)를 적용하여 특이 케이스를 처리하는 공통 동작을 새로운 요소로 옮긴다. > 특이 케이스 클래스는 간단한 요청에는 항상 같은 값을 반환하는 게 보통이므로, 해당 특이 케이스의 리터럴 레코드를 만들어 활용할 수 있을 것이다.
+8. 아직도 특이 케이스 검사 함수를 이용하는 곳이 남아 있다면 검사 함수를 인라인(6.2)한다.
+
+### 예시
+
+#### 예시 1. 다형성 이용하기
+
+전력 회사가 전력이 필요한 현장에 제공하는 인프라 서비스 코드가 있다고 해보자. 현장과 고객에 대한 정보를 나타내는 클래스 일부를 표현했다.
+
+```js
+// Site 클래스
+class Site {
+  get customer() {
+    return this._customer;
+  }
+  // 중략...
+}
+```
+
+```js
+// Customer 클래스
+class Customer {
+  get name() {
+    return this._name; // 고객 이름
+  }
+  get billingPlan() {
+    return this._billingPlan; // 요금제
+  }
+  set billingPlan(plan) {
+    this._billingPlan = plan;
+  }
+  get paymentMethod() {
+    return this._paymentMethod; // 납부 이력
+  }
+  // 중략...
+}
+```
+
+일반적인 상황에서는 고객 이름에 고객의 이름이 잘 들어 있을 것이다. 하지만 이사 후 잠시 비어있거나, 이사 후 이름이 바뀌었을 경우에는 이름이 제대로 들어 있지 않을 것이다. 이를 `미확인 고객` 관련 예외라고 이름 붙여보자.
+
+모든 게터, 세터 로직들에 if문으로 분기를 만들어 `미확인 고객`에 대한 처리를 하도록 할 수 있다. 예컨대 다음과 같은 코드다.
+
+```js
+// 클라이언트 1
+const aCustomer = site.customer;
+// 중략
+let customerName;
+// highlight-next-line
+if (aCustomer === "미확인 고객") customerName = "거주자";
+else customerName = aCustomer.name;
+
+// 클라이언트 2
+const plan =
+  // highlight-next-line
+  aCustomer === "미확인 고객"
+    ? registry.billingPlans.basic
+    : aCustomer.billingPlan;
+
+// 클라이언트 3
+// highlight-next-line
+if (aCustomer === "미확인 고객") aCustomer.billingPlan = newPlan;
+
+// 클라이언트 4
+const weeksDelinquent =
+  // highlight-next-line
+  aCustomer === "미확인 고객"
+    ? 0
+    : aCustomer.paymentMethod.weeksDelinquentInLastYear;
+```
+
+하지만 이제 우리는 이런 경우 여기 저기 비슷한 관심사의 로직이 퍼지기 쉬운데다 중복 코드도 발생하기 쉬운 취약한 구조라는 점을 알고 있다. 모든 곳에서 일일이 조건문으로 대응하기 보다 고객 이름을 가지고 있는 객체를 생성하고 아예 그 객체를 사용하도록 하는 편이 좋다.
+
+이러한 객체를 `특이 케이스 객체`라고 한다. 여러 곳에 흩뿌려져 있는 조건문이 예외에 해당하는 하나의 `특이 케이스 객체`를 리턴하도록 고쳐보자. 단순히 값을 리턴하는게 아니라 해당 예외 객체가 값을 수정할 수도 있어야 한다면 때문에 객체 리터럴 대신 클래스를 선택하면 된다.
+
+첫 번째 예시에서는 `조건부 로직을 다형성으로 바꾸기(10.4)`를 활용해보자. `Site` 클래스의 `customer`를 속성을 호출하는 쪽(ex. `site.customer`)에서 일반적인 `Customer`를 리턴하거나, 예외 경우에는 아예 우리가 만들어준 `특이 케이스 객체`인 `UnknownCustomer`를 리턴하도록 하는 것이다. 팩터리 함수를 생각하면 좋다.
+
+그렇게 되면 사용하는 쪽에서는 `Customer`인지, `UnknownCustomer`인지 구분하지 않고 동일하게 Customer 인터페이스처럼 사용할 수 있고, 결과적으로 조건문을 각 클래스 내부로 숨길 수 있다.
+
+먼저 미확인 고객인지를 나타내는 메서드를 고객 클래스에 추가한다. 미확인 고객 전용 클래스도 같이 만들어준다. 이걸로 끝이 아니라 각 클래스에 필요한 속성이 있다면 추가 시켜나갈 것이다.
+
+```js
+// Customer 클래스
+class Customer {
+  get name() {
+    return this._name; // 고객 이름
+  }
+  get billingPlan() {
+    return this._billingPlan; // 요금제
+  }
+  set billingPlan(plan) {
+    this._billingPlan = plan;
+  }
+  get paymentMethod() {
+    return this._paymentMethod; // 납부 이력
+  }
+  // highlight-next-line
+  get isUnknown() {
+    // highlight-next-line
+    return false;
+    // highlight-next-line
+  }
+  // 중략...
+}
+
+// UnknownCustomer 클래스
+class UnknownCustomer {
+  get isUnknown() {
+    return true;
+  }
+}
+```
+
+결과적으로는 모든 곳에서 `isUnknown` 메서드를 사용하여 미확인 고객인지 확인하도록 해야 하는데, 한번에 고치기에는 쉽지 않다. 단계적으로 고쳐나가기 위해 여러 곳에서 똑같이 수정해야하는 코드를 별도 `함수로 추출(6.1)`해보자. 여기서는 특이 케이스 여부를 확인하는 코드가 추출 대상이다.
+
+```js
+function isUnknown(arg) {
+  if (!(arg instanceof Customer || arg === "미확인 고객")) {
+    throw new Error(`잘못된 값과 비교: <${arg}>`); // 리팩터링 도중 실수 방지 용도
+  }
+  return arg === "미확인 고객"; // 인자로 받은 값이 미확인 고객이라면 true, 아니면 false (isUnknown)
+}
+```
+
+위에서 만든 `isUnknown` 함수를 호출하도록 수정한 코드를 보자. 조건식 부분이 모두 `isUnknown(aCustomer)` 형태로 통일되었다.
+
+```js
+// 클라이언트 1
+const aCustomer = site.customer;
+// 중략
+let customerName;
+// highlight-next-line
+if (isUnknown(aCustomer)) customerName = "거주자";
+else customerName = aCustomer.name;
+
+// 클라이언트 2
+const plan =
+  // highlight-next-line
+  isUnknown(aCustomer) ? registry.billingPlans.basic : aCustomer.billingPlan;
+
+// 클라이언트 3
+// highlight-next-line
+if (isUnknown(aCustomer)) aCustomer.billingPlan = newPlan;
+
+// 클라이언트 4
+const weeksDelinquent =
+  // highlight-next-line
+  isUnknown(aCustomer) ? 0 : aCustomer.paymentMethod.weeksDelinquentInLastYear;
+```
+
+이제 특이 케이스일 때 `Site` 클래스가 `UnknownCustomer` 객체를 리턴하도록 수정할 차례다.
+
+```js
+// Site 클래스
+get customer() {
+  return this._customer === "미확인 고객" ? new UnknownCustomer() : this._customer;
+}
+```
+
+서두에서 `Customer`, `UnknownCustomer`를 만들면서 `isUnknown` 속성을 추가했던게 기억나나? 이제 `customer`의 결과물은 `isUnknown` 속성을 갖고 있다. `isUnknown()` 함수 내부에서 '미확인 고객' 문자열로 하드 코딩 했던 부분을 대신 해당 속성을 사용하도록 수정할 차례다.
+
+```js
+function isUnknown(arg) {
+  if (!(arg instanceof Customer || arg === "미확인 고객")) {
+    throw new Error(`잘못된 값과 비교: <${arg}>`); // 리팩터링 도중 실수 방지 용도
+  }
+  // highlight-next-line
+  return arg.isUnknown;
+}
+```
+
+여기까지 되었다면 거의 다 왔다. 이제 본격적으로 코드를 서랍장에 정리해 넣을 차례다.
+
+`isUnknown(aCustomer)`라고 통일했던 부분은 곰곰 생각해보면 `Customer` 클래스나 `UnknownCustomer` 클래스의 동작으로 바꾸어 생각할 수 있다. 게터 혹은 세터 메서드로 치환할 수 있다는 뜻이다. 이제야 비로소 흩어져 있는 `if`문을 `UnknownCustomer` 내부로 옮기면 되겠다는 판단이 선다.
+
+```js
+class UnknownCustomer {
+  get name() { return "거주자";}
+  get billingPlan { return registry.billingPlans.basic; }
+  set billingPlan(arg) { // 특이 케이스 객체는 값 객체고, 항상 불변 값을 유지해야 하므로 수정은 무시한다 }
+  get paymentMethod { return new NullPaymentHistory() }
+}
+
+// 특이 케이스가 다른 객체를 반환해야 한다면 그 객체 역시 특이케이스여야 하는 것이 일반적이다
+class NullPaymentHistory {
+  get weeksDelinquentInLastYear() { return 0; }
+}
+```
+
+이렇게 정리가 끝나면 `isUnknown` 함수가 불필요해졌을 것이다. `죽은 코드 제거하기(8.6)`로 없애주면서 마무리 한다.
+
+#### 예시 2. 객체 리터럴 이용하기
+
+위의 예시는 효과적이지만 다소 복잡했다. 만약 고객 정보를 갱신할 필요 없이 값을 읽어오기만 해도 되는 경우였다면 클래스까지 만들 필요 없이 `객체 리터럴`을 사용해도 된다. 저자는 클래스를 더 선호한다고 밝히고 있긴 하다.
+
+다른 부분은 전부 동일하고, `특이 케이스 객체`를 클래스가 아닌 객체 리터럴을 사용한다는 차이가 있다. 다음과 같이 객체를 리턴하는 함수를 만들고, 객체를 불변 값으로 사용할 수 있도록 `Object.freeze()` 등을 활용해주면 된다.
+
+다만 이 메서드는 `얕은 동결`만 지원한다. 만약 중첩 객체라면 중첩 객체까지 지원하는 로직을 직접 작성하거나 `Deep Copy`를 지원하는 유틸 함수를 사용해야 한다.
+
+```js
+function createUnknownCustomer() {
+  // 단순 객체를 리턴하는 함수
+  return {
+    isUnknown: false,
+    name: "거주자",
+    billingPlan: registry.billingPlans.basic,
+    paymentHistory: { weeksDelinquentInLastYear: 0 },
+  };
+}
+```
+
+#### 예시 3. 변환 함수 사용하기
+
+마지막 예시 역시 거의 유사하나, 다만 앞서 언급한 방식들 보다 다소 터프한 느낌이다. `enrichSite` 같은 변환 함수를 만들어 원본 데이터를 기본 형태 혹은 특이 케이스 객체로 변형한다.
+
+단순하게 설명하자면, 원본 객체를 deep copy 해놓고 함수 내부에서 복사된 객체를 직접 수정해 원하는 결과물을 만드는 방식이다.
+
+```js
+function enrichSite(aSite) {
+  const result = _.cloneDeep(aSite);
+  const unknownCustomer = {
+    isUnknown: false,
+    name: "거주자",
+    billingPlan: registry.billingPlans.basic,
+    paymentHistory: { weeksDelinquentInLastYear: 0 },
+  };
+
+  // highlight-next-line
+  if (isUnknown(result.customer)) result.customer = unknownCustomer;
+  // highlight-next-line
+  else result.customer.isUnknown = false;
+  return result;
+}
+```
+
+## 10-6 어서션 추가하기
+
+### 배경
+
+특정 조건이 참일 때만 작동하는 코드가 있을 수 있다. 예컨대 `제곱근(root, √)`을 계산할 때는 입력이 음수여서는 안된다. 코드가 동작하기 위해 반드시 필요한 가정이라고 할 수 있다.
+
+타입스크립트 유저라면 익숙할 용어인 `어서션(assertion)`은 바로 이렇게 특정 값을 확언해야 할 때 쓰인다. 어서션을 항상 참이라고 가정하는 조건부 문장으로 작성해두고, 만약 어서션이 실패할 경우 개발자가 잘못한 것으로 처리하면 된다.
+
+어서션은 위에 언급한 예시처럼 오류 찾기 뿐만 아니라 가정이 항상 코드에 명시적으로 드러나 있지 않아서 개발자가 직접 코드를 추론해서 알아내야 할 때가 있다. 주석을 작성해도 되지만, 조금 더 나은 방식은 `어서션`을 사용하여 코드 자체에 삽입해둘 수도 있고 저자는 이 방식을 조금 더 추천하고 있다.
+
+주의할 점은 기본적으로 어서션은 시스템 운영에 영향을 주는 성격의 개념이 아니다. 따라서 어서션을 추가한다고 해서 동작이 달라지면 안된다.
+
+또한 불필요하게 어서션을 남발해서도 안 된다. `반드시 참이어야만 하는 것`이면서 `프로그래머가 일으킬만한 오륲`에만 적절히 부여할 수 있도록 하자. 어떻게 보자면 다소 역설적이게도 `절대 실패하지 않으리라 믿는 곳`에만 사용하라는 뜻일 수 있다.
+
+### 절차
+
+1. 참이라고 가정하는 조건이 보이면 그 조건을 명시하는 어서션을 추가한다.
+
+### 예시
+
+너무 많은 말 보다는 예시를 보는 게 좋겠다. 다음은 고객이 상품 구입 시 할인율을 적용 받는 예시 코드다.
+
+```js
+// Customer 클래스
+applyDiscount(aNumber) {
+  return this.discountRate ? aNumber - this.discountRate * aNumber : aNumber
+}
+```
+
+이 코드가 성립하려면 `aNumber`는 항상 양수여야 한다는 가정이 추가되어야 한다. 이런 조건을 가정하는 어서션을 추가한다.
+
+어서션을 추가할 때 삼항연산자 형태로는 자리가 부적절하니 `if - then` 문장으로 바꿔보자.
+
+```js
+applyDiscount(aNumber) {
+  if (this.discountRate) {
+    // highlight-next-line
+    assert(this.discountRate >= 0);
+    return aNumber - this.discountRate * aNumber
+  } else {
+    return aNumber
+  }
+}
+```
+
+곰곰 생각해보니 `applyDiscount`에서 실패가 발생하려면 애초에 입력 데이터 `discountRate`의 값을 설정하는 세터 메서드 쪽에서 애초에 양수만 받도록 강제하는 게 좋아보인다.
+
+다음과 같이 세터 쪽에도 어서션을 추가하면 끝이다.
+
+```js
+set discountRate(aNumber) {
+  // highlight-next-line
+  assert(aNumber === null || aNumber >= 0);
+  this._discountRate = aNumber;
+}
+```
+
+## 10-7 제어 플래그를 탈출문으로 바꾸기
+
+### 배경
+
+`제어 플래그`란 코드의 동작을 변경하는데 사용되는 조건을 말한다. 비유하자면 기차 철길의 진로를 바꾸는 선로 전환기 같은 것이라고 비유할 수 있겠다. 하지만 아래 사진에서 볼 수 있듯 이러한 전환기는 여러 갈래 분기를 만들고, 흐름을 복잡하게 만드는 원인이 될 수 있다.
+
+<img
+  alt="rail"
+  src="https://ww.namu.la/s/c1395e96c9907eac3f4eec1a767894a8c81a0f31c4f51e57b0df32e6c3cdd4efc261b30c0b2d7f2d823b9aacf5cb9e6e041244afcda6236dc4bd4e33f064db3ff768dbd13f5e6f1637bb11a30cacf5f501b68fbf4af8014a58db9a9e987f25da"
+/>
+
+저자는 제어 플래그를 항상 리팩터링의 대상으로 본다. 이러한 코드 스멜은 반복문 안에서 분기를 만드는 방식으로 발생하기 쉬우며 거의 대부분의 경우 `탈출문`을 사용해 개선할 수 있다고 주장한다.
+
+앞으로 제어 플래그를 만나면 탈출문을 사용해 로직이 어떻게 흘러가는지 명확히 알려줄 수 있도록 하자.
+
+### 절차
+
+1. 제어 플래그를 사용하는 코드를 함수로 추출(6.1)할지 고려한다.
+2. 제어 플래그를 갱신하는 코드 각각을 적절한 제어문으로 바꾼다. 하나 바꿀 때마다 테스트한다. > 제어문으로는 주로 `return`, `break`, `continue`가 쓰인다.
+3. 모두 수정했다면 제어 플래그를 제거한다.
+
+### 예시
+
+다음은 사람 목록을 순회하면서 악당을 찾는 예시 코드이고, 악당 이름은 하드코딩 되어 있다.
+
+```js
+function checkForMiscreants() {
+  // highlight-next-line
+  let found = false;
+  for (const p of people) {
+    if (!found) {
+      if (p === "조커") {
+        sendAlert();
+        // highlight-next-line
+        found = true;
+      }
+      if (p === "사루만") {
+        sendAlert();
+        // highlight-next-line
+        found = true;
+      }
+    }
+  }
+}
+```
+
+여기서 제어 플래그는 `found`다. `found`의 Boolean 값에 따라 반복문 내부의 `if`문의 동작이 달라진다. 이 부분을 탈출문으로 바꿔보자.
+
+일단 루프를 돌면서 `조커`나 `사루만`에 해당하는 조건문 안으로 진입하고 나면 더 이상 루프를 순회할 필요가 없다. `return`문으로 함수를 종료하고 나와도 무방하다.
+
+그렇게 하고 나면 제어 플래그를 위한 변수와 조건문이 사라지게 되어 코드가 더욱 간결해진다.
+
+```js
+function checkForMiscreants() {
+  for (const p of people) {
+    if (p === "조커") {
+      sendAlert();
+      // highlight-next-line
+      return;
+    }
+    if (p === "사루만") {
+      sendAlert();
+      // highlight-next-line
+      return;
+    }
+  }
+}
+```
+
+`for + if`문 대신 배열 메서드를 사용하면 다음과 같이 바꿀 수도 있다.
+
+```js
+function checkForMiscreants() {
+  const isMiscreant = people.some((p) => ["조커 ", "사루만"].includes(p));
+
+  if (isMiscreant) {
+    sendAlert();
+    return;
+  }
+}
+```
