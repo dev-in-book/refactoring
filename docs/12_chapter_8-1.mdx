@@ -1,0 +1,883 @@
+---
+sidebar_position: 1
+---
+
+import Authors from './Authors.tsx';
+
+# 8장 기능 이동 上
+
+<Authors bookLeader="Mengkki" />
+
+## 8-1 함수 옮기기 (Move function)
+
+### 배경
+
+좋은 소프트웨어 설계의 핵심은 모듈화가 얼마나 잘 되어있는지를 뜻하는 모듈성이다.
+
+> 🙋‍♀️ 모듈성이 뭔가요?
+> 🤔 프로그램의 어딘가를 수정하려 할 때 해당 기능과 깊이 관련된 작은 일부만 이해해도 가능하게 해주는 능력입니다
+
+모듈성을 높이기 위해서는 서로 연관된 요소들을 함께 묶고, 요소 사이의 연결 관계를 쉽게 찾고 이해할 수 있도록 해야 한다.
+
+그런데, 프로그램을 얼마나 잘 이해했느냐에 따라 연관된 요소들을 묶는 구체적인 방법이 달라질 수 있다. 그 높아진 이해를 반영하려면 요소들을 이리저리 옮겨야 할 수 있다.
+
+함수를 옮길지 말지를 정하기란 쉽지 않다. 그럴 땐 그 함수의 현재 컨텍스트와 후보 컨텍스트를 둘러보면 도움이 된다.
+
+그 함수를 호출하는 함수들은 무엇인지, 그 함수가 호출하는 함수들을 또 무엇이 있는지, 그 함수가 사용하는 데이터는 무엇인지 살펴보면
+
+서로 관련된 여러 함수를 묶을 새로운 컨텍스트가 필요해질 때도 많은데, 이럴 때는 여러 함수를 클래스로 묶기나, 클래스 추출하기로 해결할 수 있다.
+
+### 절차
+
+1. 선택한 함수가 현재 컨텍스트에서 사용 중인 모든 프로그램 요소를 살펴본다. 이 요소들 중에도 함께 옮겨야 할 게 있는지 고민해본다.
+   1. 호출되는 함수 중 함께 옮길 게 있다면 대체로 그 함수를 먼저 옮기는게 낫다. 얽혀 있는 함수가 여러 개라면 다른 곳에 미치는 영향이 적은 함수부터 옮기자
+   2. 하위 함수들의 호출자가 고수준 함수 하나뿐이면 먼저 하위 함수들을 고수준 함수에 인라인한 다음 고수준 함수를 옮기고, 옮긴 위치에서 개별 함수들로 다시 추출하자
+2. 선택한 함수가 다형 메서드인지 확인한다
+   1. 객체 지향 언어에서는 같은 메서드가 슈퍼클래스나 서브클래스에도 선언되어있는지까지 고려해야 한다.
+3. 선택한 함수를 타깃 컨텍스트로 복사한다 (이때 `원래의 함수를 소스 함수라 하고 복사해서 만든 새로운 함수를 타깃 함수라 한다`). 타깃 함수가 새로운 터전에 잘 자리 잡도록 다듬는다.
+   1. 함수 본문에서 소스 컨텍스트의 요소를 사용한다면 해당 요소들을 매개변수로 넘기거나 소스 컨텍스트 자체를 참조로 넘겨준다
+   2. 함수를 옮기게 되면 새로운 컨텍스트에 어울리는 새로운 이름으로 바꿔줘야 할 경우가 많다. 필요하면 바꿔준다
+4. 정적 분석을 수행한다
+5. 소스 컨텍스트에서 타깃 함수를 참조할 방법을 찾아 반영한다
+6. 소스 함수를 타깃 함수의 위임 함수가 되도록 수정한다
+7. 테스트한다
+8. 소스 함수를 인라인할지 고민해본다
+   1. 소스 함수는 언제까지라도 위임 함수로 남겨둘 수 있다. 하지만 소스 함수를 호출하는 곳에서 타깃함수를 직접 호출하는 데 무리가 없다면 중간 단계(소스 함수)는 제거하는 편이 낫다.
+
+### 예시: 중첩 함수를 최상위로 옮기기
+
+GPS 추적 기록의 총 거리를 계산하는 함수
+
+```js
+function trackSummary(points){
+	const totalTime = calculateTime();
+	const totalDistance = calculateDistance();
+	const pace = totalTime / 60 / totalDistance;
+
+	return {
+		time: totalTime,
+		distance: totalDistance,
+		pace: pace,
+	}
+
+	// 총 거리 계산
+	function calculateDistance() {
+		let result = 0;
+
+		for(let i = 1; i < points.length; i++){
+			result += distance(points[i-1], points[i]);
+		}
+
+		return result;
+	}
+
+	function distance(p1, p2) {...} // 두 지점의 거리 계산
+	function radians(degrees) {...} // 라디안 값으로 변환
+	function calculateTime() {...} // 총 시간 계산
+}
+```
+
+여기서 중첩 함수인 `calculateDistance()`를 최상위로 옮겨서 추적 거리를 다른 정보와는 독립적으로 계산하고 싶다
+
+1. 가장 먼저 이 함수를 최상위로 복사해야 한다
+
+```js
+function trackSummary(points){
+	const totalTime = calculateTime();
+	const totalDistance = calculateDistance();
+	const pace = totalTime / 60 / totalDistance;
+
+	return {
+		time: totalTime,
+		distance: totalDistance,
+		pace: pace,
+	}
+
+	// 총 거리 계산
+	function calculateDistance() {
+		let result = 0;
+
+		for(let i = 1; i < points.length; i++){
+			result += distance(points[i-1], points[i]);
+		}
+
+		return result;
+	}
+
+	function distance(p1, p2) {...} // 두 지점의 거리 계산
+	function radians(degrees) {...} // 라디안 값으로 변환
+	function calculateTime() {...} // 총 시간 계산
+}
+
+// 최상위로 복사하면서 새로운 이름(임시)을 지어줌
+// highlight-next-line
+function top_calculateDistance() {
+	let result = 0;
+
+	for(let i = 1; i < points.length; i++){
+		result += distance(points[i-1], points[i]);
+	}
+
+	return result;
+}
+```
+
+이렇게 이름을 다르게 해주면 소스 함수와 타깃 함수가 쉽게 구별된다
+
+이대로는 에러가 남. 왜냐면 추출해낸 타깃 함수가 모르는 심벌(distance와 points)를 참조하고 있기 때문
+
+```js
+// highlight-next-line
+function top_calculateDistance(points) {
+  // points를 매개변수로 추가함
+  let result = 0;
+
+  for (let i = 1; i < points.length; i++) {
+    result += distance(points[i - 1], points[i]);
+  }
+
+  return result;
+}
+```
+
+distance()함수도 똑같이 처리할 수 있지만 calculateDistance()와 함께 옮기는 게 합리적으로 보인다. 다음은 distance()와 distance()가 의존하는 코드다
+
+```js
+// trackSummary 함수 내
+function distance(p1, p2){
+	// 수학 공식들...로직들...
+	const EARTH_RADIUS = 3959;
+  // highlight-next-line
+	const dLat = radians(p2.lat) - radians(p1.lat); // radians() 사용
+	...
+
+	return EARTH_RADIUS * c;
+}
+
+function radians(degrees) {
+	return degrees * Math.PI / 180;
+}
+```
+
+distance()는 radians()만 사용하고, radians()는 현재 컨텍스트에 있는 어떤 것도 사용하지 않는다.
+
+따라서 두 함수를 매개변수로 넘기기 보다는 함께 옮겨버리는 게 낫다.
+
+얘들을 calculateDistance()안으로 옮기자
+
+```js
+function trackSummary(points){
+	const totalTime = calculateTime();
+	const totalDistance = calculateDistance();
+	const pace = totalTime / 60 / totalDistance;
+
+	return {
+		time: totalTime,
+		distance: totalDistance,
+		pace: pace,
+	}
+
+	// 총 거리 계산
+	function calculateDistance() {
+		let result = 0;
+
+		for(let i = 1; i < points.length; i++){
+			result += distance(points[i-1], points[i]);
+		}
+
+		return result;
+
+    // highlight-next-line
+		function distance(p1, p2) {...} // 두 지점의 거리 계산
+    // highlight-next-line
+		function radians(degrees) {...} // 라디안 값으로 변환
+	}
+
+	function calculateTime() {...} // 총 시간 계산
+}
+```
+
+그다음 정적 분석과 테스트를 통해 문제가 없는지 검증해야 한다
+
+문제가 없으면 같은 내용을 새로 만든 타깃 함수로 복사한다
+
+```js
+  // highlight-next-line
+	function top_calculateDistance() {
+		let result = 0;
+
+		for(let i = 1; i < points.length; i++){
+			result += distance(points[i-1], points[i]);
+		}
+
+		return result;
+    // highlight-next-line
+		function distance(p1, p2) {...} // 두 지점의 거리 계산
+    // highlight-next-line
+		function radians(degrees) {...} // 라디안 값으로 변환
+	}
+```
+
+이제 밥상은 다 차렸따
+
+소스 함수인 calculateDistance()의 본문을 top_calculateDistance()를 호출하게 하자
+
+```js
+function trackSummary(points){
+	const totalTime = calculateTime();
+	const totalDistance = calculateDistance();
+	const pace = totalTime / 60 / totalDistance;
+
+	return {
+		time: totalTime,
+		distance: totalDistance,
+		pace: pace,
+	}
+
+	function calculateDistance() {
+    // highlight-next-line
+		return top_calculateDistance(points); // 뿅
+	}
+
+	function calculateTime() {...}
+}
+```
+
+이 시점에서 반드시 모든 테스트를 수행하여 옮겨진 함수가 새 보금자리에 잘 정착했는지 확인해야 한다
+
+테스트에 통과하면 이삿짐을 새 집에 풀어놓는다. (인라인 하기)
+
+```js
+function trackSummary(points){
+	const totalTime = calculateTime();
+  // highlight-next-line
+	const totalDistance = top_calculateDistance(points);
+	const pace = totalTime / 60 / totalDistance;
+
+	return {
+		time: totalTime,
+		distance: totalDistance,
+		pace: pace,
+	}
+
+	function calculateTime() {...}
+}
+```
+
+이제 새 함수에 이름을 지어준다. 최상위 함수는 가시성이 높으니 적합한 이름을 신중히 지어주는게 좋다
+
+```js
+function trackSummary(points){
+	const totalTime = calculateTime();
+  // highlight-next-line
+	const pace = totalTime / 60 / totalDistance(points);
+
+	return {
+		time: totalTime,
+    // highlight-next-line
+		distance: totalDistance(points),
+		pace: pace,
+	}
+
+	function calculateTime() {...}
+}
+```
+
+trackSummary 내에서 totalDistance라는 변수로 활용하고 있었으니 totalDistance()라는 이름으로 변경해주고, 변수도 인라인했다.
+
+distance()와 radians()함수도 totalDistance()내의 어떤 것도 의존하지 않으니 저자라면 이것을 최상위로 옮길거라고 하시네욥
+
+```js
+function trackSummary(points) {}
+function totalDistance(points) {}
+function distance(p1, p2) {}
+function radians(degrees) {}
+```
+
+### 예시: 다른 클래스로 옮기기
+
+이번엔 함수 옮기기 리팩터링의 다채로움을 보여주기 위한 예를 준비했다
+
+```js
+class Account() {
+	get bankCharge() { //은행 이자 계산
+		let result = 4.5;
+
+		if(this._daysOverdrawn > 0) result += this.overdraftCharge;
+
+		return result;
+	}
+
+	get overdraftCharge() { // 초과 인출 이자 계산
+		if(this.type.isPremium){
+			const baseCharge = 10;
+
+			if(this.daysOverdrawn <= 7) {
+				return baseCharge;
+			} else {
+				return baseCharge + (this.daysOverdrawn - 7) * 0.85;
+			}
+		} else {
+			return this.daysOverdrawn;
+		}
+	}
+}
+```
+
+계좌 종류에 따라 이자 책정 알고리즘이 달라지도록 고칠거다. 그러면 마이너스 통장의 초과 인출 이자를 계산하는 overdraftCharge() 를 계좌 종류 클래스인 AccountType으로 옮기는게 자연스러울 것이다
+
+첫 단계로 overdraftCharge()메서드가 사용하는 기능들을 살펴보고, 그 모두를 한꺼번에 옮길만한 가치가 있는지 고민해보자. 이 예에서는 daysOverdrawn() 메서드는 Account 클래스에 남겨둬야 한다. (계좌 종류가 아닌) 계좌별로 달라지는 메서드이기 때문이다.
+
+다음으로 overdraftCharge()메서드 본문을 AccountType 클래스로 복사한 후 새 보금자리에 맞게 정리한다
+
+```js
+class AccountType() {
+  // highlight-next-line
+	overdraftCharge(daysOverDrawn) { // 초과 인출 이자 계산
+		if(this.type.isPremium){
+			const baseCharge = 10;
+
+			if(daysOverdrawn <= 7) {
+				return baseCharge;
+			} else {
+				return baseCharge + (daysOverdrawn - 7) * 0.85;
+			}
+		} else {
+			return daysOverdrawn;
+		}
+	}
+}
+```
+
+isPremium은 this에서 참조하도록 냅뒀고, daysOverDrawn은 파라미터로 받게 변경했다
+
+다음으로 원래 메서드의 본문을 수정하여 새 메서드를 호출하도록 한다.
+
+```js
+class Account() {
+	get bankCharge() { //은행 이자 계산
+		let result = 4.5;
+
+		if(this._daysOverdrawn > 0) result += this.overdraftCharge;
+
+		return result;
+	}
+
+	get overdraftCharge() { // 위임 메서드
+    // highlight-next-line
+		return this.type.overdraftCharge(this.daysOverdrawn);
+	}
+}
+```
+
+이제 위임 메서드인 overdraftCharge()를 남겨둘지 아니면 인라인할지 정해야 한다. 인라인을 선택하면 다음처럼 된다.
+
+```js
+class Account() {
+	get bankCharge() { //은행 이자 계산
+		let result = 4.5;
+    // highlight-next-line
+		if(this._daysOverdrawn > 0) result += this.type.overdraftCharge(this.daysOverdrawn); // 뿜!
+
+		return result;
+	}
+}
+```
+
+## 8-2 필드 옮기기 (Move field)
+
+### 배경
+
+프로그램의 상당 부분이 동작을 구현하는 코드로 이뤄지지만 프로그램의 진짜 힘은 데이터 구조에서 나온다.
+
+주어진 문제에 적합한 데이터 구조를 활용하면 동작 코드는 자연스럽게 단순하고 직관적으로 짜여진다.
+
+데이터 구조를 잘못 선택하면 아귀가 맞지 않는 데이터를 다루기 위한 코드로 범벅이 된다.
+
+그래서 데이터 구조가 중요하다.
+
+예를들어 함수에 어떤 레코드를 넘길 때마다 또 다른 레코드의 필드도 함께 넘기고 있다면 데이터 위치를 옮겨야 할 것이다.
+
+레코드라는 용어를 썼지만, 클래스나 객체가 와도 똑같다. 클래스는 함수가 곁들여진 레코드라 할 수 있으며, 다른 데이터와 마찬가지로 건강하게 관리돼야 한다.
+
+그러니까 예시에서는 클래스 쓸거다
+
+### 절차
+
+1. 소스 필드가 캡슐화되어있지 않다면 캡슐화한다
+2. 테스트한다
+3. 타깃 객체에 필드(와 접근자 메서드들)를 생성한다.
+4. 정적 검사를 수행한다
+5. 소스 객체에서 타깃 객체를 참조할 수 있는지 확인한다
+   1. 기존 필드나 메서드 중 타깃 객체를 넘겨주는 게 있을지 모른다. 없다면 이런 기능의 메서드를 쉽게 만들 수 있는지 살펴본다. 간단치 않다면 타깃 객체를 저장할 새 필드를 소스 객체에 생성하자. 이는 영구적인 변경이 되겠지만, 더 넓은 맥락에서 리팩터링을 충분히 하고 나면 다시 없앨 수 있을 때도 있다.
+6. 접근자들이 타깃 필드를 사용하도록 수정한다
+   1. 여러 소스에서 같은 타깃을 공유한다면, 먼저 세터를 수정하여 타깃 필드와 소스 필드 모두를 갱신하게 하고, 이어서 일관성을 깨트리를 갱신을 검출할 수 있도록 어서션을 추가하자. 모든 게 잘 마무리되었다면 접근자들이 타깃 필드를 사용하도록 수정한다.
+7. 테스트한다
+8. 소스 필드를 제거한다
+9. 테스트한다
+
+### 예시
+
+고객 클래스와 계약 클래스에서 시작하자
+
+```js
+class Customer {
+  constructor(name, discountRate) {
+    this._name = name;
+    this._discountRate = distcountRate;
+    this._contract = new CustomerContract(dateToday());
+  }
+  // highlight-next-line
+  get discountRate() {
+    return this._discountRate;
+  } // 이거를 CustomerContract로 옮기고 싶다고 해보자
+
+  becomePreferred() {
+    this._discountRate += 0.03;
+  }
+
+  applyDiscount(amount) {
+    return amount.subtract(amount.multiply(this._discountRate));
+  }
+}
+
+class CustomerContract {
+  constructor(startDate) {
+    this._startDate = startDate;
+  }
+}
+```
+
+여기서 discountRate를 Customer에서 CustomerContract로 옮기고 싶다
+
+가장 먼저 할 일은 이 필드를 캡슐화하는 것이다
+
+```js
+class Customer {
+  constructor(name, discountRate) {
+    this._name = name;
+    // highlight-next-line
+    this._setDiscountRate(discountRate); // 뿜!
+    this._contract = new CustomerContract(dateToday());
+  }
+
+  get discountRate() {
+    return this._discountRate;
+  }
+
+  _setDiscountRate(aNumber) {
+    // 뿜
+    // highlight-next-line
+    this._discountRate = aNumber;
+  }
+
+  becomePreferred() {
+    // highlight-next-line
+    this._setDiscountRate(this.discountRate + 0.03); // 뿜!
+  }
+
+  applyDiscount(amount) {
+    return amount.subtract(amount.multiply(this.discountRate));
+  }
+}
+```
+
+이제 CustomerContract클래스에 필드 하나와 접근자들을 추가한다.
+
+```js
+class CustomerContract {
+  constructor(startDate, discountRate) {
+    this._startDate = startDate;
+    // highlight-next-line
+    this._discountRate = discountRate;
+  }
+
+  // highlight-next-line
+  get discountRate() {
+    return this._discountRate;
+  }
+  set discountRate(arg) {
+    this._discountRate = arg;
+  }
+}
+```
+
+이제 Customer 클래스에서 접근자들이 새로운 필드를 사용하도록 수정한다.
+
+```js
+class Customer {
+  constructor(name, discountRate) {
+    this._name = name;
+    this._contract = new CustomerContract(dateToday());
+    this._setDiscountRate(discountRate);
+  }
+
+  get discountRate() {
+    // highlight-next-line
+    return this._contract.discountRate;
+  } //요기
+
+  _setDiscountRate(aNumber) {
+    // highlight-next-line
+    this._contract.discountRate = aNumber; // 요기
+  }
+
+  becomePreferred() {
+    this._setDiscountRate(this.discountRate + 0.03);
+  }
+
+  applyDiscount(amount) {
+    return amount.subtract(amount.multiply(this.discountRate));
+  }
+}
+```
+
+<aside>
+💡 이 리팩터링은 대체로 raw 레코드일 때 보다 객체를 활용할 때 더 수월하다 (getter와 setter로 감싸져 있는 것)
+이럴 때는 해당 레코드에 접근자 함수들을 만들고, raw 레코드를 읽고 쓰는 모든 함수가 접근자를 거치도록 고치면 된다. 걍 캡슐화해서 클래스로 바꾸는것도 방법임~
+
+</aside>
+
+### 예시: 공유 객체로 이동하기
+
+다음 코드는 이자율을 계좌별로 설정하고 있다.
+
+```js
+class Account {
+  constructor(number, type, interestRate) {
+    this._number = number;
+    this._type = type;
+    this._interestRate = interestRate;
+  }
+
+  get interestRate() {
+    return this._interestRate;
+  }
+}
+
+class AccountType {
+  constructor(nameString) {
+    this._name = nameString;
+  }
+}
+```
+
+이걸 수정해서 이자율이 계좌 종류에 따라 정해지도록 하려고 한다
+
+이자율 필드는 이미 캡슐화되어 있으니(`interestRate`) 타깃인 AccountType에 이자율 필드와 접근자 메서드를 생성해보자
+
+```js
+class AccountType {
+  constructor(nameString, interestRate) {
+    this._name = nameString;
+    // highlight-next-line
+    this._interestRate = interestRate;
+  }
+
+  // highlight-next-line
+  get interestRate() {
+    return this._interestRate;
+  }
+}
+```
+
+그런데 Account가 AccountType의 이자율을 가져오도록 수정하면 문제가 발생한다.
+
+기존에는 Account가 각각 자신만의 이자율을 갖고 있었는데, AccountType의 이자율을 가져오도록 바뀌면 종류가 같은 모든 계좌가 이자율을 공유하게 된다.
+
+기존에도 그런식으로 돼있었음 ㅇㅋ지만, 그렇지 않은 계좌가 하나라도 있다면 그건 리팩터링이 아니다.
+
+이럴땐 어서션을 추가해보세여~
+
+```js
+class Account {
+  constructor(number, type, interestRate) {
+    this._number = number;
+    this._type = type;
+    // highlight-next-line
+    assert(interestRate === this._type.interestRate); // 계좌의 이자율이 계좌 종류의 이자율과 같음을 보장함
+    this._interestRate = interestRate;
+  }
+
+  get interestRate() {
+    return this._interestRate;
+  }
+}
+```
+
+만약 모든 계좌가 AccountType별로 이자율이 같다는게 확실해지면 Account클래스에서 이자율을 직접 수정하던 코드를 완전히 제거한다
+
+```js
+class Account {
+  constructor(number, type) {
+    this._number = number;
+    this._type = type;
+  }
+
+  get interestRate() {
+    // highlight-next-line
+    return this._type.interestRate;
+  }
+}
+```
+
+## 8-3. 문장을 함수로 옮기기(Move statements into function)
+
+### 배경
+
+우리 선생님은 특정 함수를 호출하는 코드가 나올 때 마다 그 앞이나 뒤에 똑같은 코드가 실행되는 모습을 보면, 그 반복되는 부분을 피호출 함수로 합치는 방법을 궁리한다.
+
+그렇게 해 두면 추후 반복되는 부분에서 수정할 것이 생겼을 때 단 한 곳만 수정하면 된다.
+
+### 절차
+
+1. 반복 코드가 함수 호출 부분과 멀리 떨어져 있다면 문장 슬라이드하기를 적용해 근처로 옮긴다
+2. 타깃 함수를 호출하는 곳이 한 곳뿐이라면, 단순히 소스 위치에서 해당 코드를 잘라내어 피호출 함수로 복사하도 테스트한다. 이 경우라면 나머지 단계는 무시한다.
+3. 호출자가 둘 이상이면 호출자 중 하나에서 타깃 함수 호출 부분과 그 함수로 옮기려는 문장들을 함께 다른 함수로 추출한다. 추출한 함수에 기억하기 쉬운 임시 이름을 지어준다.
+4. 모든 호출자가 새로운 함수를 사용하게 되면 원래 함수를 새로운 함수 안으로 인라인 한 후 원래 함수를 제거한다
+5. 새로운 함수의 이름을 원래 함수의 이름으로 바꿔준다 (더 나은 이름이 있다면 그걸로 하자)
+
+### 예시
+
+사진 관련 데이터를 HTML로 내보내는 코드
+
+```js
+function renderPerson(outStream, person){
+	const result = [];
+	...어쩌구저쩌구
+  // highlight-next-line
+	result.push(`<p>제목: ${person.photo.title}</p>`);
+  // highlight-next-line
+	result.push(emitPhotoData(person.photo);
+	...
+
+	return result.join('\n');
+}
+
+function photoDiv(p){
+	return [
+		'div',
+    // highlight-next-line
+		`<p>제목: ${p.title}</p>`,
+    // highlight-next-line
+		emitPhotoData(p),
+		...
+	].join('\n');
+}
+
+function emitPhotoData(aPhoto){
+	const result = [];
+
+	result.push(`<p>....</p>`);
+	result.push(`<p>....</p>`);
+
+	return result.join(`\n`);
+}
+```
+
+두군데에서 emitPhotoData를 호출하고, 두 곳 바로 앞에는 제목을 출력하는 코드가 나온다. 제목 출력하는 부분을 emitPhotoData 안으로 옮겨보자.
+
+호출자 수가 하나였다면 단순히 복붙하면 되지만 호출자 수가 늘어날수록 안전한 길을 택해야 한다
+
+먼저 함수를 추출해 보자
+
+```js
+function zznew(p) {
+  //이름 진짜 성의없다...
+  return [`<p>제목: ${p.title}</p>`, emitPhotoData(p)].join(`\n`);
+}
+```
+
+그리고 다른 호출자들을 새로운 함수를 호출하도록 수정한다
+
+```js
+function renderPerson(outStream, person){
+	const result = [];
+	...어쩌구저쩌구
+  // highlight-next-line
+	result.push(zznew(person.photo)); // 뿜
+	...
+
+	return result.join('\n');
+}
+
+function photoDiv(p){
+	return [
+		'div',
+    // highlight-next-line
+		zznew(p), // 뿜
+		...
+	].join('\n');
+}
+```
+
+호출자들을 빠짐없이 수정했다면 emitPhotoData를 인라인 한다
+
+```js
+function zznew(p) {
+  return [`<p>제목: ${p.title}</p>`, `<p>....</p>`, `<p>....</p>`].join(`\n`);
+}
+```
+
+그리고 함수 이름을 바꿔준다
+
+```js
+function renderPerson(outStream, person){
+	const result = [];
+	...어쩌구저쩌구
+	result.push(emitPhotoData(person.photo)); // 뿜
+	...
+
+	return result.join('\n');
+}
+
+function photoDiv(p){
+	return [
+		'div',
+		emitPhotoData(p), // 뿜
+		...
+	].join('\n');
+}
+
+function emitPhotoData(aPhoto) { // 뿜
+	return [
+		`<p>제목: ${p.title}</p>`,
+		`<p>....</p>`,
+		`<p>....</p>`
+	].join(`\n`);
+}
+```
+
+## 8-4. 문장을 호출한 곳으로 옮기기(Move statements to callers)
+
+### 배경
+
+함수는 추상화의 기본 빌딩 블록이다. 그런데 추상화라는 것이 그 경계를 항상 올바르게 긋기는 쉽지가 않구요...
+
+코드의 기능이 달라지게 되면 추상화의 경계도 움직이게 되고...함수에 뭐 추가되고...
+
+그러다보면 초기에는 응집도 높고 한가지 일만 하던 함수가 어느새 둘 이상의 일을 하고 있게 되는것!!
+
+### 절차
+
+1. 호출자가 한두개 뿐이고 피호출 함수도 간단한 단순한 상황이면, 피호출 함수의 처음(아님 마지막)줄들을 잘라내서 호출자로 복붙한다.(필요하면 적당히 수정). 테스트만 통과하면 여기서 끝~
+2. 복잡한 상황에서는 이동하지 않길 원하는 모든 문장을 함수로 추출한다음 검색하기 쉬운 이름을 붙여준다
+   1. 대상 함수가 서브클래스에서 오버라이드됐다면 오버라이드한 서브클래스들의 메서드 모두에서 동일하게 남길 부분을 메서드로 추출한다. 이때 남겨질 메서드의 본문은 모든 클래스에서 똑같아야 한다. 그런 다음 슈퍼클래스의 메서드만 남기고 서브클래스들의 메서드를 제거한다.
+3. 원래 함수를 인라인한다
+4. 추출된 함수의 이름을 원래 함수의 이름으로 변경한다
+
+### 예시
+
+```js
+function renderPerson(outStream, person) {
+  outStream.write(`<p>${person.name}</p>\n`);
+  renderPhoto(outStream, person.photo);
+  emitPhotoData(outStream, person.photo);
+}
+
+function listRecentPhotos(outStream, photo) {
+  photos
+    .filter(() => {})
+    .forEach(p => {
+      outStream.write('<div>\n');
+      emitPhotoData(outStream, p);
+      outStream.write('</div>\n');
+    });
+}
+
+function emitPhotoData(outStream, photo) {
+  outStream.write(`<p>제목 ${photo.title}</p>`);
+  outStream.write(`<p>날짜 ${photo.date.toDateString()}</p>`);
+  outStream.write(`<p>위치 ${photo.location}</p>`);
+}
+```
+
+여기서 renderPerson은 그대로 둔 채 listRecentPhotos()가 location 정보를 다르게 렌더링하도록 변경해야 한다
+
+먼저 emitPhotoData에 남길 코드를 함수로 추출한다
+
+```js
+function emitPhotoData(outStream, photo) {
+  zztmp(outStream, photo);
+  outStream.write(`<p>위치 ${photo.location}</p>`);
+}
+
+function zztmp(outStream, photo) {
+  // 이동하지 않을 코드
+  outStream.write(`<p>제목 ${photo.title}</p>`);
+  outStream.write(`<p>날짜 ${photo.date.toDateString()}</p>`);
+}
+```
+
+잘 동작하는지 테스트해서 확인해본 후 피호출 함수를 호출자들로 한 번에 하나씩 인라인 한다. renderPerson부터 시작!
+
+```js
+function renderPerson(outStream, person) {
+  outStream.write(`<p>${person.name}</p>\n`);
+  renderPhoto(outStream, person.photo);
+  // highlight-next-line
+  zztmp(outStream, person.photo); // 아까 추출한 함수
+  // highlight-next-line
+  outStream.write(`<p>위치 ${person.photo.location}</p>`);
+}
+```
+
+이후에도 테스트 함 돌려보고 나머지 listRecentPhotos쪽에도 인라인한다
+
+```js
+function listRecentPhotos(outStream, photo) {
+  photos
+    .filter(() => {})
+    .forEach(p => {
+      outStream.write('<div>\n');
+      // highlight-next-line
+      zztmp(outStream, photo);
+      // highlight-next-line
+      outStream.write(`<p>위치 ${photo.location}</p>`);
+      outStream.write('</div>\n');
+    });
+}
+```
+
+이제 인라인한 함수를 지워준다
+
+```js
+function renderPerson(outStream, person) {
+  outStream.write(`<p>${person.name}</p>\n`);
+  renderPhoto(outStream, person.photo);
+  zztmp(outStream, photo);
+  outStream.write(`<p>위치 ${photo.location}</p>`);
+}
+
+function listRecentPhotos(outStream, photo) {
+  photos
+    .filter(() => {})
+    .forEach(p => {
+      outStream.write('<div>\n');
+      zztmp(outStream, photo);
+      outStream.write(`<p>위치 ${photo.location}</p>`);
+      outStream.write('</div>\n');
+    });
+}
+
+/*
+function emitPhotoData(outStream, photo){
+	zztmp(outStream, photo);
+  outStream.write(`<p>위치 ${photo.location}</p>`);
+}*/
+
+function zztmp(outStream, photo) {
+  // 이동하지 않을 코드 남아있음!
+  outStream.write(`<p>제목 ${photo.title}</p>`);
+  outStream.write(`<p>날짜 ${photo.date.toDateString()}</p>`);
+}
+```
+
+이제 zztmp의 이름을 원래 함수이름으로 되돌리면 끝!
+
+```js
+function emitPhotoData(outStream, photo) {
+  outStream.write(`<p>제목 ${photo.title}</p>`);
+  outStream.write(`<p>날짜 ${photo.date.toDateString()}</p>`);
+}
+```
