@@ -1,0 +1,550 @@
+---
+sidebar_position: 1
+---
+
+import Authors from "./Authors.tsx";
+
+# 11 장 API 리펙터링 下
+
+<Authors bookLeader="saengmotmi" />
+
+## 11-7 세터 제거하기
+
+### 배경
+
+세터 메서드는 필드를 수정할 수 있다. 만약 수정되기를 원치 않는 필드가 있다면 세터를 제거하는 것이 좋다. 세터를 남겨놓고도 필드가 수정되지 않도록 할 수도 있지만, 애초에 세터를 남겨놓지 않는 것이 추후 이 코드를 읽을 사람에게 "이 필드는 변경되면 안된다"는 메시지를 명확히 전달할 수 있는 방법이다.
+
+물론 변경될 필요가 있는 필드가 있다면 세터를 남겨두는 것이 맞다.
+
+### 절차
+
+1. 설정해야 할 값을 생성자에서 받지 않는다면 그 값을 받을 매개변수를 생성자에 추가한다(함수 선언 바꾸기 6-5). 그런 다음 생성자 안에서 적절한 세터를 호출한다. 만약 세터 여러 개를 제거하려면 해당 값 모두를 한꺼번에 생성자에 추가한다. 그러면 이후 과정이 간소해진다.
+2. 생성자 밖에서 세터를 호출하는 곳을 찾아 제거하고, 대신 새로운 생성자를 사용하도록 한다. 하나 수정할 때마다 테스트한다.
+3. 세터 메서드를 인라인(6-2)한다. 가능하다면 해당 필드를 불변으로 만든다.
+4. 테스트한다.
+
+### 예시
+
+다음과 같은 간단한 `Person` 클래스가 있다.
+
+```js
+class Person {
+  get name() {
+    return this._name;
+  }
+  set name(arg) {
+    this._name = arg;
+  }
+  get id() {
+    return this._id;
+  }
+  set id(arg) {
+    this._id = arg;
+  }
+}
+```
+
+이 클래스를 사용해서 사람 객체를 하나 생성해보면 다음과 같은 코드가 될 것이다.
+
+```js
+const jongtaek = new Person();
+jongtaek.name = "종택";
+jongtaek.id = "12345";
+```
+
+하지만 이름은 개명할 수 있으니 `name` 필드는 생성 후에도 변경될 수 있는 여지가 있겠지만 고유 식별자인 `id`는 그렇게 되어서는 안된다. 의도를 명확히 알리기 위해 `id` 세터를 없애보자.
+
+최초 한번은 id를 설정할 수 있어야 하므로 함수 선언 바꾸기(6-5)로 생성자에서 id를 받도록 하자. 그리고 생성자를 통해 id를 설정해주었으므로 세터는 불필요해졌다. 세터를 삭제하면 끝이다.
+
+```js
+class Person {
+  constructor(id) {
+    this.id = id;
+  }
+  get name() {
+    return this._name;
+  }
+  set name(arg) {
+    this._name = arg;
+  }
+  get id() {
+    return this._id;
+  }
+}
+```
+
+## 11-8 생성자를 팩터리 함수로 바꾸기
+
+### 배경
+
+생성자는 객체를 초기화하는 특별한 용도의 함수다. 하지만 생성자는 특별한 만큼 일반 함수와는 달라서 몇 가지 제약이 따라 붙는다. 예컨대 자바의 경우에는 생성자가 반드시 그 생성자를 정의한 클래스의 인스턴스를 반환해야 한다. 서브클래스의 인스턴스, Proxy 등을 반환할 수는 없다는 것이다. 생성자의 이름(`constructor`)도 고정되어 있다. 또한 생성자를 호출하려면 `new` 를 사용해야 한다. 일반 함수가 들어갈 수 있는 모든 자리에 쓸 수는 없게 된다.
+
+반면 팩터리 함수는 일반 함수다. 이런 제약이 없다는 뜻이다.
+
+### 절차
+
+1. 팩터리 함수를 만든다. 팩터리 함수의 본문에서는 원래의 생성자를 호출한다.
+2. 생성자를 호출하던 코드를 팩터리 함수 호출로 바꾼다.
+3. 하나씩 수정할 때마다 테스트한다.
+4. 생성자의 가시 범위가 최소가 되도록 제한한다.
+
+### 예시
+
+직원 유형을 다루는 직원 클래스가 있다.
+
+```js
+class Employee {
+  constructor(name, typeCode) {
+    this._name = name;
+    this._typeCode = typeCode;
+  }
+  get name() {
+    return this._name;
+  }
+  get type() {
+    return Employee.legalTypeCodes[this._typeCode];
+  }
+  static get legalTypeCodes() {
+    return {
+      E: "ENGINEER",
+      S: "SALESMAN",
+      M: "MANAGER",
+    };
+  }
+}
+```
+
+다음은 이 클래스를 사용하는 코드다. 다음과 같은 형태로 사용할 수 있다. 이 코드를 팩터리 함수를 사용하도록 바꿔보자.
+
+```js
+const candidates = new Employee(document.name, document.employeeType);
+const leadEngineer = new Employee(document.leadEngineer, "E");
+```
+
+우선 팩터리 함수를 만들어야 한다. 일단 팩터리 함수의 본문을 단순히 생성자에 위임하는 방식으로 구현한다. 그런 다음 생성자를 호출하는 곳을 찾아 수정한다. 한 번에 하나씩, 생성자 대신 팩터리 함수를 사용하게 바꾼다. 그러면 다음과 같이 바꿀 수 있게 된다.
+
+```js
+function createEmployee(name, typeCode) {
+  return new Employee(name, typeCode);
+}
+function createEngineer(name) {
+  return new Employee(name, "E");
+}
+```
+
+## 11-9 함수를 명령으로 바꾸기
+
+### 배경
+
+명령 패턴(`Command Pattern`)은 명령을 추상화 해서 객체로 다루는 디자인 패턴이다. 일반적으로 `excute()` 같은 이름의 실행 함수를 갖고, 일반 명령 대비 보조 연산이나 수명주기의 정밀한 제어가 필요한 경우 유용하게 쓰일 수 있다. 다음은 명령 패턴의 예시다.
+
+```js
+class Command {
+  excute() {}
+}
+
+class PrintCommand () {
+  constructor(print) {
+    this.printMsg = print;
+  }
+
+  excute() {
+    console.log(this.printMsg);
+  }
+}
+
+const command = new PrintCommand("Hello Command");
+command.excute(); // Hello Command
+```
+
+다만 이러한 패턴은 저자도 언급하고 있다시피, 객체는 지원하지만 일급 합수를 지원하지 않는 프로그래밍 언어에서 유용하게 쓰일 수 있다. 이를 통해 일급 함수의 기능을 지원하지 않는 언어에서도 일급 함수와 유사한 기능을 흉내낼 수 있다.
+
+그러나 이러한 변경은 언제나 트레이드 오프를 달고 다닌다. 일반 객체에 비해 명령 객체는 보통 복잡도가 높기 마련이다. 게다가 자바스크립트에서는 일급 함수를 지원하기 때문에 진짜 쓸 일이 거의 없다. 정말 복잡한 기능을 사용할 때만 쓰도록 하자.
+
+### 절차
+
+1. 대상 함수의 기능을 옮길 빈 클래스를 만든다. 클래스 이름은 함수 이름에 기초해 짓는다.
+2. 방금 생성한 빈 클래스로 함수를 옮긴다. 명령 관련 이름은 사용하는 프로그래밍 언어의 명명 규칙을 따르되 규칙이 딱히 없다면 `excute`나 `call` 같이 명령의 실행 함수에 흔히 쓰이는 이름을 택하자.
+3. 함수의 인수들 각각은 명령의 필드로 만들어 생성자를 통해 설정할지 고민해본다.
+
+### 예시
+
+다음은 건강보험 애플리케이션에서 사용하는 점수 계산 함수다. 이 복잡한 함수를 크래스로 옮기며 리팩터링 해보겠다.
+
+```js
+function score(candidates, medicalExam, scoringGuide) {
+  let result = 0;
+  let healthLevel = 0;
+  let highMediacalRiskFlag = false;
+
+  if (medicalExam.isSmoker) {
+    healthLevel += 10;
+    highMediacalRiskFlag = true;
+  }
+  let certificationGrade = "regular";
+  if (scoringGuide.stateWithLowCertification(candidates.originState)) {
+    certificationGrade = "low";
+    result -= 5;
+  }
+  // ...
+  result -= Math.max(healthLevel, -5, 0);
+}
+```
+
+먼저 빈 클래스를 만들고 예제 함수를 클래스로 옮긴다. 이 단계에서 아래 코드에서 현재 명령이 받고 있는 인수들을 생성자로 만들어서, `excute` 메서드는 매개 변수를 받지 않도록 수정한다.
+
+```js
+function score(candidates, medicalExam, scoringGuide) {
+  return new Score(candidates, medicalExam, scoringGuide);
+}
+
+class Scorer {
+  constructor(candidates, medicalExam, scoringGuid) {
+    return new Score(candidates, medicalExam, scoringGuid);
+  }
+
+  excute() {
+    let result = 0;
+    let healthLevel = 0;
+    let highMediacalRiskFlag = false;
+
+    if (medicalExam.isSmoker) {
+      healthLevel += 10;
+      highMediacalRiskFlag = true;
+    }
+    let certificationGrade = "regular";
+    if (scoringGuide.stateWithLowCertification(this._candidates.originState)) {
+      certificationGrade = "low";
+      result -= 5;
+    }
+    // ...
+    result -= Math.max(healthLevel, -5, 0);
+    return result;
+  }
+}
+```
+
+## 11-10 명령을 함수로 바꾸기
+
+### 배경
+
+위에서 설명했듯 명령 객체는 복잡한 상황에서만 사용한다. 굳이 명령 객체를 쓸 상황이 아니라면 명령 객체를 함수로 바꾸는 것이 좋다.
+
+### 절차
+
+1. 명령을 생성하는 코드와 명령의 실행 메서드를 호출하는 코드를 함께 함수로 추출(6-1)한다. 이 함수가 바로 명령을 대체할 함수다.
+2. 명령의 실행 함수가 호출하는 보조 메서드들 각각을 인라인(6-2)한다.
+3. 함수 선언 바꾸기(6-5)를 적용하여 생성자의 매개변수 모두를 명령의 실행 메서드로 옮긴다.
+4. 명령의 실행 메서드에서 참조하는 필드들 대신 대응하는 매개변수를 사용하게끔 바꾼다. 하나씩 수정할 때마다 테스트한다.
+5. 생성자 호출과 명령의 실행 메서드 호출을 호출자(대체 함수) 안으로 인라인한다.
+6. 테스트한다.
+7. 죽은 코드 제거하기(8-9)로 명령 클래스를 없앤다.
+
+### 예시
+
+아래 코드는 명령 객체다.
+
+```js
+// 명령 객체
+class ChargeCalculator {
+  constructor(customer, usage, provider) {
+    this._customer = customer;
+    this._usage = usage;
+    this._provider = provider;
+  }
+  get baseCharge() {
+    return this._customer.baseRate * this._usage;
+  }
+  get charge() {
+    return this._baseCharge + this._provider.connetionCharge;
+  }
+}
+
+// 호출자
+monthCharge = (customer, usage, provider) =>
+  new ChargeCalculator(customer, usage, provider).charge;
+```
+
+크게 복잡하지 않읜 함수로 대체하는 리팩터링을 적용해보겠다. 가장 먼저 이 클래스를 생성하고 호출하는 코드를 함께 함수로 추출한다.
+
+```js
+monthCharge = charge(customer, usage, provider);
+function charge(customer, usage, provider) {
+  return new ChargeCalculator(customer, usage, provider).charge;
+}
+```
+
+이제 보조 메서드들을 처리해줄 차례다. 이 경우 `baseCharge()`가 보조 메서드에 해당한다. 만약 메서드가 값을 반환할 경우 먼저 반환할 값을 변수로 추출한다. 그 다음 보조 메서드를 인라인한다.
+
+```js
+// ChargeCalculator 클래스
+// 1단계
+get charge() {
+  const baseCharge = this.baseCharge();
+  return baseCharge + this._provider.connetionCharge;
+}
+// 2단계
+get charge() {
+  const baseCharge = this._customer.baseRate * this._usage;
+  return baseCharge + this._provider.connetionCharge;
+}
+```
+
+이제 로직 전체가 한 메서드 안에서 이뤄진다.
+
+```js
+class ChargeCalculator {
+  constructor(customer, usage, provider) {
+    this._customer = customer;
+    this._usage = usage;
+    this._provider = provider;
+  }
+  charge() {
+    const baseCharge = this._customer.baseRate * this._usage;
+    return baseCharge + this._provider.connetionCharge;
+  }
+}
+function charge(customer, usage, provider) {
+  return new ChargeCalculator(customer, usage, provider).charge(
+    customer,
+    usage,
+    provider
+  );
+}
+```
+
+여기까지 왔으면 거의 다 했다. 이제 `charge`의 본문에서 필드 대신 건네 받은 매개변수를 쓰도록 바꿔주자.
+
+```js
+function charge(customer, usage, provider) {
+  const baseCharge = customer.baseRate * usage;
+  return baseCharge + provider.connetionCharge;
+}
+```
+
+## 11-11 수정된 값 반환하기
+
+### 배경
+
+개발 하면서 가장 까다로운 부분 중에 하나는 데이터의 변경(`mutate`)을 추적하는 일이다. 쉽게 파악할 수 없기 때문에 `Redux` 같은 라이브러리는 Action을 발행시키고 그 Action이 Reducer를 지나가도록 강제하는 식으로 제약 조건을 걸기도 한다.
+
+어쨌든 변경 사실을 사용자가 명확히 알 수 있도록 하는 것이 중요하다. 몇 가지 방법이 있는데, 그 중 하나가 바로 변수를 갱신하는 함수가 수정된 값을 반환하도록 하는 것이다. 사용자는 반환된 값을 변수에 담아 활용할 수 있다.
+
+이 방식으로 코딩하면 호출자 코드를 읽을 때 변수가 갱신된 것임을 인지할 수 있다.
+
+이 방식은 값 하나를 계산하는 분명한 목적이 있을 때 가장 효과적이다. 여러 개를 갱신하는 경우에는 적절하지 않을 수도 있다는 뜻이다.
+
+### 절차
+
+1. 함수가 수정된 값을 반환하게 하여 호출자가 그 값을 자신의 변수에 저장하게 한다.
+2. 테스트한다.
+3. 피호출 함수 안에 반환할 값을 가리키는 새로운 변수를 선언한다. 이 작업이 의도대로 이뤄졌는지 검사하고 싶다면 호출자에서 초깃값을 수정해보자. 제대로 처리했다면 수정된 값이 무시된다.
+4. 테스트한다.
+5. 계산이 선언과 동시에 이뤄지도록 통합한다(즉, 선언 시점에 계산 로직을 바로 실행해 대입한다).
+6. 테스트한다.
+7. 피호출 함수의 변수 이름을 새 역할에 어울리도록 바꿔준다.
+8. 테스트한다.
+
+### 예시
+
+GPS 위치 목록으로 다양한 계산을 수행하는 코드가 있다. 이번 리팩터링에서는 고도 상승분(ascent) 만을 계산해보겠다.
+
+```js
+let totalAscent = 0;
+let totalTime = 0;
+let totalDistance = 0;
+calculateAscent();
+calculateTime();
+calculateDistance();
+const pace = totalTime / 60 / totalDistance;
+
+function calculateAscent() {
+  for (let i = 1; i < points.length; i++) {
+    const verticalChange = points[i].elevation - points[i - 1].elevation;
+    totalAscent += verticalChange > 0 ? verticalChange : 0;
+  }
+}
+```
+
+`calculateAscent()` 내부에서 `totalAscent`가 갱신된다는 사실이 드러나지 않으므로 `calculateAscent()`와 외부 환경이 어떻게 연결되어 있는지가 숨겨진다. 이 사실을 외부로 알려보자.
+
+먼저 `totalAscent`를 반환하고, 호출한 곳에서 변수에 대입하게 고친다.
+
+```js
+let totalAscent = 0;
+let totalTime = 0;
+let totalDistance = 0;
+totalAscent = calculateAscent();
+calculateTime();
+calculateDistance();
+const pace = totalTime / 60 / totalDistance;
+
+function calculateAscent() {
+  for (let i = 1; i < points.length; i++) {
+    const verticalChange = points[i].elevation - points[i - 1].elevation;
+    totalAscent += verticalChange > 0 ? verticalChange : 0;
+  }
+  return totalAscent;
+}
+```
+
+그 다음 `calculateAscent()` 안에 반환할 값을 담을 변수인 `result`를 선언한 다음, 이 계산이 변수 선언과 동시에 수행되도록 하고 변수에 `const`를 붙여 불변으로 만든다.
+
+```js
+const totalAscent = calculateAscent();
+let totalTime = 0;
+let totalDistance = 0;
+calculateTime();
+calculateDistance();
+const pace = totalTime / 60 / totalDistance;
+
+function calculateAscent() {
+  let result = 0;
+  for (let i = 1; i < points.length; i++) {
+    const verticalChange = points[i].elevation - points[i - 1].elevation;
+    totalAscent += verticalChange > 0 ? verticalChange : 0;
+  }
+  return result;
+}
+```
+
+## 11-12 오류 코드를 예외로 바꾸기
+
+### 배경
+
+과거에는 오류 코드(`error code`)를 사용하는 게 보편적이었다고 한다. 이제는 예외를 사용한다. 예외는 독자적인 흐름이 있어서, 오류 발생에 따른 복잡한 상황에 대처하는 코드를 작성하지 않아도 되므로 오류 코드를 일일이 검사하거나 오류를 식별해 콜스택 위로 던지는 일을 신경 쓰지 않아도 된다.
+
+예외는 정확히 예상 밖의 동작일 때만 쓰여야 한다. 즉, 예외를 던지는 코드를 프로그램 종료 코드로 대체해도 여전히 프로그램이 동작 할지를 따져보면 된다. 정상 동작하지 않을 것 같다면 예외를 사용하면 안된다. 이 경우에는 오류 코드를 사용하는 것이 더 좋다.
+
+### 절차
+
+1. 콜스택 상위에 해당 예외를 처리할 예외 핸들러를 작성한다. 이 핸들러는 처음에는 모든 예외를 다시 던지게 해둔다. 적절한 처리를 해주는 핸들러가 이미 있다면 지금의 콜스택도 처리할 수 있도록 확장한다.
+2. 테스트한다.
+3. 해당 오류 코드를 대체할 예외와 그 밖의 예외를 구분할 식별 방법을 찾는다. 사용하는 프로그래밍 언어에 맞게 선택하면 된다. 대부분 언어에서는 서브클래스를 사용하면 될 것이다.
+4. 정적 검사를 수행한다.
+5. catch절을 수정하여 직접 처리할 수 있는 예외는 적절히 대처하고 그렇지 않은 예외는 다시 던진다.
+6. 테스트한다.
+7. 오류 코드를 반환하는 곳 모두에서 예외를 던지도록 수정한다. 하나씩 수저할 때마다 테스트한다.
+8. 모두 수정했다면 그 오류 코드를 콜스택 위로 전달하는 코드를 모두 제거한다. 하나씩 수정할 때마다 테스트한다. 먼저 오류 코드를 검사하는 부분을 함정(trap)으로 바꾼 다음, 함정에 걸려들지 않는지 테스트한 후 제거하는 전략을 권한다. 함정에 걸려드는 곳이 있다면 오류 코드를 검사하는 코드가 아직 남아 있다는 뜻이다. 함정을 무사히 피했다면 안심하고 본문을 정리하자(죽은 코드 제거하기 8-9).
+
+### 예시
+
+배송지의 배송 규칙을 알아내는 예시 코드다. 이 코드는 국가 정보(`country`)가 유효한지를 이 함수 호출 전 다 검증이 되어있다는 가정 하에 작동한다. 문제가 있다면 오류 코드(`-23`)를 반환하여 오류를 호출자에게 전달한다.
+
+```js
+function localShippingRules(country) {
+  const data = countryData.shippingRules[country];
+  if (data) return new ShippingRules(data);
+  else return -23;
+}
+
+function calculateShippingCosts(anOrder) {
+  const shippingRules = localShippingRules(anOrder.country);
+  if (shippingRules < 0) return shippingRules; // 오류 전파 -> 더 윗단 함수에서는 오류를 낸 주문을 오류 목록(errorList)에 넣는다.
+  // ...
+}
+
+const status = calculateShippingCosts(orderData);
+if (status < 0) errorList.push({ order: orderData, errorCode: status });
+```
+
+이 케이스에서 이 오류가 예상된 오류인지를 따져본다. 만약 그렇다면 오류 코드를 예외로 바꾸는 리팩터링을 적용해도 좋다.
+
+먼저 `try / catch` 문을 적용시켜준다. 이 때 에러를 무시할 것이 아니라면 잡은 예외는 모두 던져주기로 한다.
+
+```js
+// 최상위
+let status; // 유효 범위 때문에 분리
+
+try {
+  status = calculateShippingCosts(orderData);
+} catch (error) {
+  throw error; // 잡은 예외는 모두 다시 던져야 한다.
+}
+if (status < 0) errorList.push({ order: orderData, errorCode: status });
+```
+
+만약 이번에 다룰 에러를 다른 예외들과 구별하여 사용하고 싶다면 별도의 서브클래스를 만들어 처리한다.
+
+```js
+class OrderProcessingError extends Error {
+  constructor(errorCode) {
+    super(errorCode);
+    this.code = errorCode;
+  }
+  get name() {
+    return "OrderProcessingError";
+  }
+}
+```
+
+여기까지 했으면 아래와 같이 변경할 수 있다. 이제 `calculateShippingCosts`가 리턴하는 오류 코드를 쓸 필요가 없으므로 `status` 변수를 제거할 수 있다.
+
+이 과정에서 여전히 오류 코드가 전파되고 있는지 확인하는 검사 코드를 넣어주는 것도 좋다.
+
+```js
+try {
+  calculateShippingCosts(orderData);
+} catch (error) {
+  if (error instanceof OrderProcessingError) {
+    errorList.push({ order: orderData, errorCode: status });
+  } else {
+    throw error;
+  }
+}
+```
+
+## 11-13 예외를 사전확인으로 바꾸기
+
+### 배경
+
+예외는 `뜻하지 않은` 상황에 쓰여야 한다. 하지만 종종 과용되기도 한다. 만약 예외를 발생시키지 않을 수 있는, 즉 미리 예측할 수 있는 경우에는 함수 호출 전에 조건을 검사해줄 수 있다는 뜻이다. 만약 사전확인이 가능하다면 그렇게 해야 한다.
+
+### 절차
+
+1. 예외를 유발하는 상황을 검사할 수 있는 조건문을 추가한다. catch 블록의 코드를 조건문의 조건절 중 하나로 옮기고, 남은 try 블록의 코드를 다른 조건절로 옮긴다.
+2. catch 블록에 어서션을 추가하고 테스트한다.
+3. try문과 catch 블록을 제거한다.
+4. 테스트한다.
+
+### 예시
+
+리소스 풀이 있고, 요청이 들어오면 그 풀에서 가용한 자원을 할당해주는 코드가 있다고 가정해보자. 하지만 리소스 풀에서 리소스가 바닥나는 경우는 예상치 못한 오류 상황이라고 볼 수는 없다. 예외 대신 조건문으로 처리해주는 것이 좋다.
+
+```js
+class ResourcePool {
+  available = [ ... ]
+
+  get resource() {
+    let result;
+    try {
+      result = available.pop(); // 리소스 풀에서 가용한 자원이 있다면 pop으로 뽑아서 result에 할당
+    } catch (e) {
+      result = Resource.create(); // 가용한 자원이 없다면 생성
+      allocated.add(result); // 생성한 리소스를 할당된 목록에 추가
+    }
+    return result;
+  }
+}
+```
+
+조건문으로 대체하면 대략 다음과 같은 코드가 된다.
+
+```js
+class ResourcePool {
+  available = [ ... ]
+
+  get resource() {
+    let result;
+
+    if (available.isEmpty()) {
+      result = available.pop();
+    } else {
+      result = Resource.create();
+      allocated.add(result);
+    }
+
+    return result;
+  }
+}
+```
