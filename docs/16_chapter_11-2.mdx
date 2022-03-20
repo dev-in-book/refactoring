@@ -157,9 +157,9 @@ const command = new PrintCommand("Hello Command");
 command.excute(); // Hello Command
 ```
 
-다만 이러한 패턴은 저자도 언급하고 있다시피, 객체는 지원하지만 일급 합수를 지원하지 않는 프로그래밍 언어에서 유용하게 쓰일 수 있다. 이를 통해 일급 함수의 기능을 지원하지 않는 언어에서도 일급 함수와 유사한 기능을 흉내낼 수 있다.
+이러한 전략 패턴은 객체는 지원하지만 일급 함수를 지원하지 않는 프로그래밍 언어에서 유용하게 쓰일 수 있다.
 
-그러나 이러한 변경은 언제나 트레이드 오프를 달고 다닌다. 일반 객체에 비해 명령 객체는 보통 복잡도가 높기 마련이다. 게다가 자바스크립트에서는 일급 함수를 지원하기 때문에 진짜 쓸 일이 거의 없다. 정말 복잡한 기능을 사용할 때만 쓰도록 하자.
+유의할 점은 이러한 디자인 패턴은 언제나 트레이드 오프를 달고 다닌다는 점이다. 일반 객체에 비해 명령 객체는 보통 복잡도가 높기 마련이다. 게다가 자바스크립트에서는 일급 함수를 지원하기 때문에 일반적으로는 쓸 일이 없다. 정말 복잡한 기능을 사용할 때만 쓰도록 하자.
 
 ### 절차
 
@@ -169,7 +169,7 @@ command.excute(); // Hello Command
 
 ### 예시
 
-다음은 건강보험 애플리케이션에서 사용하는 점수 계산 함수다. 이 복잡한 함수를 크래스로 옮기며 리팩터링 해보겠다.
+다음은 건강보험 애플리케이션에서 사용하는 점수 계산 함수다. 이 복잡한 함수를 클래스로 옮기며 리팩터링 해보겠다.
 
 ```js
 function score(candidates, medicalExam, scoringGuide) {
@@ -193,14 +193,14 @@ function score(candidates, medicalExam, scoringGuide) {
 
 먼저 빈 클래스를 만들고 예제 함수를 클래스로 옮긴다. 이 단계에서 아래 코드에서 현재 명령이 받고 있는 인수들을 생성자로 만들어서, `excute` 메서드는 매개 변수를 받지 않도록 수정한다.
 
-```js
-function score(candidates, medicalExam, scoringGuide) {
-  return new Score(candidates, medicalExam, scoringGuide);
-}
+최종적으로는 `excute()` 메서드를 사용하는 아래와 같은 클래스 형태로 변경된다.
 
+```js
 class Scorer {
   constructor(candidates, medicalExam, scoringGuid) {
-    return new Score(candidates, medicalExam, scoringGuid);
+    this.candidates = candidates;
+    this.medicalExam = medicalExam;
+    this.scoringGuide = scoringGuid;
   }
 
   excute() {
