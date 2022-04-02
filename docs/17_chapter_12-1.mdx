@@ -1,0 +1,571 @@
+---
+sidebar_position: 1
+---
+
+import Authors from './Authors.tsx';
+
+# 12장 상속 다루기 上
+
+<Authors bookLeader='positiveko' />
+
+## 12-1 메서드 올리기
+
+![inheritance](https://refactoring.com/rgrams/pullUpMethod.svg)
+
+```js
+class Employee {...}
+
+class Salesperson extends Employee {
+  get name() {...}
+}
+
+class Engineer extends Employee {
+  get name() {...}
+}
+```
+
+```js
+class Employee {
+  get name() {...}
+}
+
+class Salesperson extends Employee {...}
+class Engineer extends Employee {...}
+```
+
+### 배경
+
+중복 코드 제거는 중요하다. 메서드들의 본문 코드가 똑같다면 그냥 복사해서 메서드 올리기를 적용하면 되겠지만, 
+일반적으로 중복되는 코드를 찾는 것은 쉽지 않다. 따라서 차이점을 찾는 방법으로 중복 코드를 찾는다.
+
+메서드 올리기 리팩터링을 적용하려면 각각의 함수를 `매개변수화`한 다음 메서드를 상속 계층의 위로 올리는 식으로 선행 단계를 거친다.
+반면, 메서드 올리기를 적용하기에 까다로운 상황은 해당 메서드의 본문에서 참조한느 필드들이 서브클래스에만 있는 경우다. 
+이런 경우 필드를 먼저 슈퍼 클래스로 올린 다음 메서드를 올려야 한다.
+
+두 메서드의 전체 흐름은 비슷하지만 세부 내용이 다르다면 [템플릿 메서드 만들기](https://refactoring.com/catalog/formTemplateMethod.html)를 고려해본다.
+
+### 예시
+
+1. 두 서브 클래스에서 같은 일을 수행하는 메서드를 찾는다.
+```js title='Employee 클래스(Party 상속)'
+get annualCost() {
+  return this.monthlyCost * 12;
+}
+```
+```js title='Department 클래스 (Party 상속)'
+get totalAmount() {
+  return this.monthlyCost * 12;
+}
+```
+
+2. 두 메서드에서 참조하는 monthlyCost() 속성은 슈퍼클래스에는 정의되어 있지 않다. 정적 언어라면 슈퍼클래스에 추상 메서드를 정의한다.
+3. 두 메서드의 이름을 함수 선언 바꾸기로 통일한다.
+
+```js title='Department 클래스'
+get annualCost() {
+  return this.monthlyCost * 12;
+}
+```
+
+4. 서브클래스 중 하나의 메서드를 복사해 슈퍼클래스에 붙여넣는다.
+```js title='Party 클래스'
+get annualCost() {
+  return this.monthlyCost * 12;
+}
+```
+
+정적 언어였다면 여기서 컴파일하여 모든 참조가 올바른지 확인하자. 
+자바스크립트는 동적 언어이니 Employee와 Department에서 차례대로 제거하며 테스트한다.
+
+## 12-2 필드 올리기
+
+![Pull Up Field](https://refactoring.com/rgrams/pullUpField.svg)
+
+```js
+class Employee {...} // Java
+
+class Salesman extends Employee {
+  private String name;
+}
+
+class Engineer extends Employee {
+  private String name;
+}
+```
+
+```js
+class Employee {
+  protected String name;
+}
+
+class Salesman extends Employee {...}
+class Engineer extends Employee {...}
+```
+
+### 배경
+
+서브클래스들이 독립적으로 개발되었거나 뒤늦게 하나의 계층구조로 리팩터링된 경우 일부 기능이 중복되어 있을 수 있다. 특히 필드가 중복되기 쉽다.
+따라서 분석 결과 필드들이 비슷한 방식으로 쓰인다고 판단되면 슈퍼클래스로 끌어올린다.
+
+이 방식으로 두 가지 중복을 없앨 수 있는데,
+- 첫째, 데이터 중복 선언을 없앨 수 있다.
+- 둘째, 해당 필드를 사용하는 동작을 서브클래스에서 슈퍼클래스로 옮길 수 있다.
+
+동적 언어 중에는 필드를 클래스 정의에 포함시키지 않는 경우가 많은데, 대신 필드에 가장 처음 값이 대입될 때 등장한다. 
+이런 경우라면 필드를 올리기 전에 반드시 생성자 본문부터 올려야 한다.
+
+### 절차
+1. 후보 필드를 사용하는 곳 모두가 그 필드를 동일한 방식으로 사용하는지 분석한다.
+2. 필드의 이름이 다르다면 필드 이름 바꾸기로 통일한다.
+3. 슈퍼클래스에 새로운 필드 생성한다. (서브클래스에서 이 필드에 접근할 수 있어야 함 *protected)
+4. 서브 클래스의 필드 제거한다.
+5. 테스트한다.
+
+## 12-3 생성자 본문 올리기 
+
+![Pull Up Constructor Body](https://refactoring.com/rgrams/pullUpConstructorBody.svg)
+
+```js
+class Party {...}
+
+class Employee extends Party {
+  constructor(name, id, monthlyCost) {
+  super();
+  this._id = id;
+  this._name = name;
+  this._monthlyCost = monthlyCost;
+  }
+}
+```
+
+```js
+class Party {
+  constructor(name){
+  this._name = name;
+  }
+}
+
+class Employee extends Party {
+  constructor(name, id, monthlyCost) {
+  super(name);
+  this._id = id;
+  this._monthlyCost = monthlyCost;
+  }
+}
+```
+
+### 배경
+
+생성자는 다루기 까다롭다. 일반 메서드와는 달라서 저자는 생성자에서 하는 일에 제약을 두는 편이다.
+서브클래스에서 기능이 같은 메서드를 발견하면 함수 추출하기와 메서드 올리기를 차례로 적용해서 슈퍼클래스로 옮긴다.
+그런데 그 메서드가 생성자라면 조금 다른 식으로 접근한다.
+> 이번 리팩터링이 간단하지 않다면 생성자를 팩터리 함수로 바꾸기를 고려한다.
+
+### 절차
+
+1. 슈퍼클래스에 생성자가 없다면 정의한다. 서브클래스의 생성자들에서 이 생성자가 호출되는지 확인한다.
+2. 문장 슬라이드하기로 공통 문장 모두를 super() 호출 직후로 옮긴다.
+3. 공통 코드를 슈퍼클래스에 추가하고 서브클래스들에서는 제거한다. 생성자 매개변수 중 공통 코드에서 참조하는 값들을 모두 super()로 이동한다.
+4. 테스트한다.
+5. 생성자 시작 부분으로 옮길 수 없는 공통코드는 함수 추출하기와 메서드 올리기를 차례로 적용한다.
+
+### 예시
+
+```js title='class Party{}'
+class Employee extends Party {
+  constructor(name, id, monthlyCost) {
+  super();
+  this._id = id;
+  this._name = name;
+  this._monthlyCost = monthlyCost;
+  }
+}
+
+class Department extends Party {
+  constructor(name, staff) {
+  super();
+  this._name = name;
+  this._staff = staff;
+  }
+}
+```
+
+여기서 공통 코드는 `this._name = name;`이다. 따라서 Employee에서 슬라이드하여 super()호출 바로 아래로 옮긴다.
+
+```js 
+class Employee extends Party {
+  constructor(name, id, monthlyCost) {
+  super();
+  // highlight-next-line
+  this._name = name;
+  this._id = id;
+  this._monthlyCost = monthlyCost;
+  }
+}
+```
+
+테스트가 성공하면 이 공통 코드를 슈퍼클래스로 옮긴다. 이 코드가 생성자의 인수인 name을 참조하므로 이 인수를 슈퍼클래스 생성자에 매개변수로 건넨다.
+```js title='class Party'
+costructor(name) {
+  this._name = name;
+}
+```
+
+```js
+class Employee extends Party {
+  constructor(name, id, monthlyCost) {
+  // highlight-next-line
+  super(name);
+  this._id = id;
+  this._name = name;
+  this._monthlyCost = monthlyCost;
+  }
+}
+
+class Department extends Party {
+  constructor(name, staff) {
+  // highlight-next-line
+  super(name);
+  this._name = name;
+  this._staff = staff;
+  }
+}
+```
+
+테스트가 통과되면 끝이다.
+
+### 예시: 공통 코드가 나중에 올 때
+
+생성자는 대부분은 super()를 호출하여 공통 작업을 먼저 처리한 다음, 각 서브클래스에 필요한 추가 작업을 처리하는 식으로 동작한다.
+그런데 이따금 공통 작업이 뒤에 오는 경우도 있다.
+
+```js title='class Employee'
+constructor(name) {...}
+get isPrivileged() {...}
+assignCar() {...}
+```
+
+```js title='class Manager extends Employee'
+constructor (name, grade) {
+  super(name);
+  this._grade = grade;
+  if (this.isPrivilaged) this.assignCar(); // 모든 서브클래스가 수행
+}
+
+get isPrivilaged() {
+  return this._grade > 4;
+}
+```
+
+isPrivileged()는 grade 필드에 값이 대입된 후에야 호출될 수 있고, 서브클래스만이 이 필드에 값을 대입할 수 있기 때문이다.
+따라서 공통 코드를 함수로 추출하고, 추출한 메서드를 슈퍼클래스로 옮기는 방식으로 리팩터링한다.
+
+```js title='class Manager'
+costructor(name, grade) {
+  super(name);
+  this._grade = grade;
+  this.finishConstruction();
+}
+
+finishConstruction() {
+  if (this.isPrivilaged) this.assignCar();
+}
+```
+
+```js title='class Employee' 
+finishConstruction() {
+  if (this.isPrivilaged) this.assignCar();
+}
+```
+
+## 12-4 메서드 내리기
+![Push Down Method](https://refactoring.com/rgrams/pushDownMethod.svg)
+```js
+class Employee {
+  get quota {...}
+}
+
+class Engineer extends Employee {...}
+class Salesman extends Employee {...}
+```
+
+```js
+class Employee {...}
+class Engineer extends Employee {...}
+class Salesman extends Employee {
+  get quota {...}  
+}
+```
+
+### 배경
+
+특정 서브클래스 하나(혹은 소수)와만 관련된 메서드는 슈퍼클래스에서 제거하고 해당 서브클래스에 추가하는 편이 깔끔하다.
+다만 이 리팩터링은 해당 기능을 제공하는 서브클래스가 정확히 무엇인지 호출자가 알고 있을 때만 적용한다.
+그러지 않다면 서브클래스에 따라 다르게 동작하는 슈퍼클래스의 조건부 로직을 다형성으로 바꿔야 한다.
+
+### 절차
+1. 대상 메서드를 모든 서브클래스에 복사한다.
+2. 슈퍼클래서에서 해당 메서드 제거한다.
+3. 테스트한다.
+4. 이 메서드를 사용하지 않는 모든 서브클래스에서 제거한다.
+5. 태스트한다.
+
+## 12-5 필드 내리기
+![Push Down Field](https://refactoring.com/rgrams/pushDownField.svg)
+
+```java
+class Employee {        // Java
+  private String quota;
+}
+
+class Engineer extends Employee {...}
+class Salesman extends Employee {...}
+```
+
+```java
+class Employee {...}
+class Engineer extends Employee {...}
+
+class Salesman extends Employee {
+  protected String quota;
+}
+```
+
+### 배경
+서브클래스 하나에서만 사용하는 필드는 해당 서브클래스로 옮긴다.
+
+### 절차
+1. 대상 필드를 모든 서브클래스에 정의한다.
+2. 수퍼클래스에서 그 필드를 제거한다.
+3. 테스트한다.
+4. 이 필드를 사용하지 않는 모든 서브클래스에서 제거한다.
+5. 태스트한다.
+
+
+## 12-6 타입 코드를 서브클래스로 바꾸기
+![Replace Type Code with Subclasses](https://refactoring.com/rgrams/replaceTypeCodeWithSubclasses.svg)
+
+```js
+function createEmployee(name, type) {
+  return new Employee(name, type);
+}
+```
+```js
+function createEmployee(name, type) {
+  switch (type) {
+  case "engineer": return new Engineer(name);
+  case "salesman": return new Salesman(name);
+  case "manager":  return new Manager (name);
+}
+```
+
+### 배경
+소프트웨어 시스템에서는 비슷한 대상들을 특정 특성에 따라 구분해야 할 때가 종종 있다. 
+이런 경우 `타입 코드`로 다루곤 한다. 타입 코드 이상의 것이 필요하다면 서브클래스를 사용할 수 있다.
+서브클래스는 두 가지 면에서 장점을 갖는데, 
+- 첫째, 조건에 따라 다르게 동작하도록 해주는 다형성을 제공한다. 타입 코드에 따라 동작이 달라져야 하는 함수가 여러개일 때 특히 유용하다.
+- 둘째, 특정 타입에서만 의미가 있는 값을 사용하는 필드나 메서드가 있을 때, 서브클래스를 만들고 필요한 서브클래스만 필드를 갖도록 정리할 수 있다. 
+
+이번 리팩터링은 대상 클래스에 직접 적용할지, 아니면 타입 코드 자체에 적용할지를 고민해야 한다. 
+
+예를 들어 전자라면 직원의 하위 타입인 엔지니어를 만든다. 
+반면 후자는 직원에게 직원 유형 '속성'을 부여하고 이 속성을 클래스로 정의해서 엔지니어 속성과 관리자 속성 같은 서브클래스를 만드는 식이다.
+대상 클래스를 직접 서브클래싱하는 게 간단하지만 업무 유형을 다른 용도로 쓰고 싶을 때 그럴 수 없다는 단점이 있다.
+또한 유형이 불변일 때도 직접 서브클래싱 방식은 이용할 수 없다. 이 때에는 먼저 타입 코드에 기본형을 객체로 바꾸기를 적용하여 직원 유형 클래스를 만든 다음, 이 리팩터링을 적용한다.
+
+### 절차
+1. 타입 코드 필드를 자가 캡슐화 한다.
+2. 타입 코드 값 하나를 선택하여 그 값에 해당하는 서브클래스를 만든다. 타입 코드 게터 메서드를 오버라이드하여 해당 타입 코드의 리터럴 값을 반환하게 한다.
+3. 매개변수로 받은 타입 코드와 방금 만든 서브클래스를 매핑하는 선택 로직을 만든다.
+4. 테스트한다.
+5. 타입 코드 값 각각에 대해 서브클래스 생성과 선택 로직 추가를 반복한다. 클래스 하나가 완성될 때마다 테스트한다.
+6. 타입 코드 필드를 제거한다.
+7. 테스트한다.
+8. 타입 코드 접근자를 이용하는 메서드 모두에 메서드 내리기와 조건부 로직을 다형성으로 바꾸기를 적용한다.
+
+### 예시: 직접 상속할 때
+```js title='class Employee'
+constructor(name, type) {
+  this.validateType(type);
+  this._name = name;
+  this._type = type;
+}
+
+validateType(arg) {
+  if (!['engineer', 'manager', 'salesperson'].includes(arg)) {
+    throw new Error(`${arg}라는 직원 유형은 없다.`)
+  }
+}
+toString() {return `${this._name} ${this._type}`;}
+```
+
+1) 타입 코드 변수를 자가 캡슐화 한다.
+```js title='class Employee'
+get type() {return this._type;}
+// highlight-next-line
+toString() {return `${this._name} ${this.type}`;}
+```
+
+2) 타입 코드 중에 엔지니어를 선택해서 직접 상속 방식으로 구현하자. 즉, 직원 클래스 자체를 서브클래싱한다.
+타입 코드 게터를 오버라이드하여 적절한 리터럴 값을 반환하기만 하면 된다.
+```js
+class Engineer extends Employee {
+  get type() {return 'engineer';}
+}
+```
+
+자바스크립트의 생성자는 객체를 반환할 수 있지만 선택 로직을 생성자에 넣으려 하면 필드 초기화와 로직이 꼬여서 엉망이 될 것이다.
+그러니 생성자를 팩터리 함수로 바꿔서 선택 로직을 담을 별도 장소를 마련한다.
+
+```js
+function createEmployee(name, type) {
+  return new Employee(name, type);
+}
+```
+
+새로 만든 서브클래스를 사용하기 위한 선택 로직을 팩터리에 추가한다.
+
+```js
+function createEmployee(name, type) {
+  switch (type) {
+    case 'engineeer': return new Engineer(name, type);
+  }
+  return new Employee(name, type);
+}
+```
+
+4) 테스트한다. 저자는 편집증이 있어서.. 엔지니어 클래스에서 오버라이드한 게터가 일부러 틀린 값을 반환하게 한 다음 실패하도록 테스트해서 체크한다고 한다.
+5) 남은 유형에도 같은 작업을 반복한다.
+```js
+class Salesperson extends Employee {
+  get type() {return 'salesperson';}
+}
+
+class Manager extends Employee {
+  get type() {return 'manager';}
+}
+
+function createEmployee(name, type) {
+  switch (type) {
+    case 'engineer': return new Engineer(name, type);
+    case 'salesperson': return new Salesperson(name, type);
+    case 'manager': return new Manager(name, type);
+  }
+  return new Employee(name, type);
+}
+```
+
+6) 모든 유형에 적용했다면 타입 코드 필드와 슈퍼클래스의 게터를 제거한다.
+```js title='class Employee'
+constructor(name, type) {
+  this.validateType(type);
+  this._name = name;
+}
+
+toString() {return `${this._name} ${this.type}`;}
+```
+
+7) 테스트한 후 검증 로직도 제거한다. 생성자에 건네는 타입 코드 인수도 없애버린다.
+```js title='class Employee'
+constructor(name) {
+  this._name = name;
+}
+
+function createEmployee(name, type) {
+  switch (type) {
+    case 'engineer': return new Engineer(name, type);
+    case 'salesperson': return new Salesperson(name, type);
+    case 'manager': return new Manager(name, type);
+    default: throw new Error(`${arg}라는 직원 유형은 없다.`)
+  }
+}
+```
+
+### 예시: 간접 상속할 때
+이번에는 직원의 서브클래스로 '아르바이트'와 '정직원'이라는 클래스가 이미 있어서 Employee를 직접 상속하는 방식으로는
+타입 코드 문제에 대처할 수 없다고 가정하자. 직원 유형을 변경하는 기능을 유지하고 싶다는 점도 직접 상속을 사용하지 않는 이유가 된다.
+
+```js title='class Employee'
+constructor(name, type) {
+  this.validateType(type);
+  this._name = name;
+  this._type = type;
+}
+
+validateType(arg) {
+  if (!['engineer', 'manager', 'salesperson'].includes(arg)) {
+    throw new Error(`${arg}라는 직원 유형은 없다.`)
+  }
+}
+get type() {return this._type;}
+set type(arg) {this._type = arg;}
+
+get capitalizedType() {
+  return this._type.charAt(0).toUpperCase() + this._type.substr(1).toLowerCase();
+}
+toString() {return `${this._name} ${this.capitalizedType}`;}
+```
+
+1) 첫 번째로 타입 코드를 객체로 바꾼다.
+```js
+class EmployeeType {
+  constructor(aString) {
+    this._value = aString;
+  }
+  toString() {return this._value;}
+}
+```
+
+```js title='class Employee' 
+constructor (name, type) {
+  this.validateType(type);
+  this._name = name;
+  this.type = type;
+}
+
+validateType(arg) {
+  if (!['engineer', 'manager', 'salesperson'].includes(arg)) {
+    throw new Error(`${arg}라는 직원 유형은 없다.`)
+  }
+}
+get typeString() {return this._type.toString();}
+get type() {return this._type;}
+set type(arg) {this._type = new EmployeeType(arg);}
+
+get capitalizedType() {
+  return this._type.charAt(0).toUpperCase()
+   + this._type.substr(1).toLowerCase();
+}
+toString() {return `${this._name} ${this.capitalizedType}`;}
+```
+
+이제 차분히 리팩터링하기..
+
+```js title='class Employee'
+set type(arg) {this._type = Employee.createEmployee(arg);}
+static createEmployee(aString) {
+  switch (type) {
+    case 'engineer': return new Engineer(name, type);
+    case 'salesperson': return new Salesperson(name, type);
+    case 'manager': return new Manager(name, type);
+    default: throw new Error(`${arg}라는 직원 유형은 없다.`)
+  }
+}
+
+class EmployeeType {
+ // 제거하지 않고 다양하 서브클래스 사이의 관계를 명확히 알려주기 위해 놔둔다.
+}
+class Engineer extends EmployeeType {
+  toString() {return 'engineer';}
+}
+class Manager extends EmployeeType {
+  toString() {return 'manager';}
+}
+class Salesperson extends EmployeeType {
+  toString() {return 'salesperson';}
+}
+
+```
+
+#### references
+[이미지 출처](https://refactoring.com/catalog)
