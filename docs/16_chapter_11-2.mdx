@@ -265,7 +265,7 @@ monthCharge = (customer, usage, provider) =>
   new ChargeCalculator(customer, usage, provider).charge;
 ```
 
-크게 복잡하지 않읜 함수로 대체하는 리팩터링을 적용해보겠다. 가장 먼저 이 클래스를 생성하고 호출하는 코드를 함께 함수로 추출한다.
+크게 복잡하지 않은 함수로 대체하는 리팩터링을 적용해보겠다. 가장 먼저 이 클래스를 생성하고 호출하는 코드를 함께 함수로 추출한다.
 
 ```js
 monthCharge = charge(customer, usage, provider);
