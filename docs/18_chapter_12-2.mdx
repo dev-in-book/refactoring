@@ -1,0 +1,622 @@
+---
+sidebar_position: 1
+---
+
+import Authors from "./Authors.tsx";
+
+# 12장 상속 다루기 下
+
+<Authors bookLeader="saengmotmi" />
+
+## 12-7 서브클래스 제거하기
+
+![inheritance](https://refactoring.com/rgrams/removeSubclass.svg)
+
+### 배경
+
+부모 클래스를 상속 받는 서브클래스를 사용하면 원래 데이터 구조를 확장하거나 변형할 수 있다. 저자는 이를 '다름을 프로그래밍 하는 멋진 수단'이라고 말한다.
+
+하지만 시스템이 커지면서 그 변종의 필요성이 줄어들거나 멸종하기도 한다. 이럴 경우에는 그 불필요한 코드를 읽게 놔두지 말고 방을 빼서 슈퍼클래스의 필드로 세들어 살게 하는게 좋다.
+
+### 절차
+
+1. 서브클래스의 생성자를 팩터리 함수로 바꾼다.
+2. 서브클래스의 타입을 검사하는 코드가 있다면 그 검사 코드에 함수 추출하기와 함수 옮기기를 차례로 적용하여 슈퍼클래스로 옮긴다. 하나 변경할 때마다 테스트한다.
+3. 서브클래스의 타입을 나타내는 필드를 슈퍼클래스에 만든다.
+4. 서브클래스를 참조하는 메서드가 방금 만든 타입 필드를 이용하도록 수정한다.
+5. 서브클래스를 지운다.
+6. 테스트한다.
+
+### 예시
+
+이 리팩터링을 할 때는 다수의 서브클래스를 한꺼번에 합치는 경우가 많을 수 있어서, 서브클래스들이 팩터리 함수를 거쳐 슈퍼클래스로 흡수될 수 있도록 하면 좋다.
+
+다음 코드는 `Person`을 중심으로 `Male`, `Female`이 확장된 형태다.
+
+```js
+class Person {
+  constructor(name) {
+    this._name = name;
+  }
+  get name() {
+    return this._name;
+  }
+  get genderCode() {
+    return "X";
+  }
+}
+
+class Male extends Person {
+  get genderCode() {
+    return "M";
+  }
+}
+
+class Female extends Person {
+  get genderCode() {
+    return "F";
+  }
+}
+
+const numberOfMales = people.filter((p) => p instanceof Male).length;
+```
+
+이정도 복잡도라면 바로 합쳐버려도 되겠지만 혹시 모를 사이드 이펙트를 대비하여 익혀두면 좋은 절차가 있다.
+
+저자는 `무언가의 표현 방법을 바꾸려 할 때면 먼저 현재의 표현을 캡슐화하여 이 변화가 클라이언트 코드에 주는 영향을 최소화 하려 한다`고 말한다. 서브클래스 생성을 캡슐화 하는 리팩터링 기법은 바로 `생성자를 함수로 바꾸기(11.8)`이므로 이를 적용해준다.
+
+아래처럼 `팩터리 메서드`를 생성자 하나당 하나씩 만들면 가장 직관적이다.
+
+```js
+function createPerson() {
+  return new Person();
+}
+function createMale() {
+  return new Male();
+}
+function createFemale() {
+  return new Female();
+}
+```
+
+하지만 이보다는 복잡한 경우가 많을 것이다. 다시 한번 예시를 보자. 성별 코드를 사용하는 곳에서 직접 객체가 생성되고 있다.
+
+```js
+function loadFromInput() {
+  const result = [];
+  data.forEach((aRecord) => {
+    let p;
+    switch (aRecord.gender) {
+      case "M":
+        p = new Male(aRecord.name);
+        break;
+      case "F":
+        p = new Female(aRecord.name);
+        break;
+      default:
+        p = new Person(aRecord.name);
+        break;
+    }
+    result.push(p);
+  });
+  return result;
+}
+```
+
+이 경우에는 먼저 생성할 클래스를 선택하는 로직을 함수로 추출한다. 그 다음 함수를 팩터리 함수로 만든다.
+
+```js
+// 로직 추출
+function createPerson(aRecord) {
+  switch (aRecord.gender) {
+    case "M":
+      return new Male(aRecord.name);
+    case "F":
+      return new Female(aRecord.name);
+    default:
+      return new Person(aRecord.name);
+  }
+}
+
+function loadFromInput() {
+  // 분리된 로직을 사용하여 객체를 생성
+  return data.map((aRecord) => createPerson(aRecord));
+}
+```
+
+앞서 살펴봤던 `numberOfMales` 변수도 살펴보자. `instanceof`를 사용해 `Person`을 직접 사용하고 있다. 이것도 함수로 캡슐화 시켜주자.
+
+이렇게 추출한 함수는 `Person` 클래스 안쪽으로 옮겨주면 된다.
+
+```js
+const numberOfMales = people.filter((p) => isMale(p)).length;
+
+// 1. 이 함수를
+function isMale(aPerson) {
+  return aPerson instanceof Male;
+}
+
+// 2. Person 클래스 안으로 옮기고
+get isMale() {
+  ...
+}
+
+// 3. 이제 numberOfMales에서 isMale 함수가 아니라 메서드를 사용하도록 한다
+const numberOfMales = people.filter((p) => p.isMale).length;
+```
+
+여기까지 하면 서브클래스에 대한 정보가 슈퍼클래스와 팩터리 함수로 캡슐화 된다. 이제 서브클래스 사이에 존재하는 차이(다름)을 슈퍼클래스에서 표현해주도록 하자.
+
+이 경우에는 성별 정보다.
+
+```js
+class Person {
+  constructor(name, genderCode) {
+    this._name = name;
+    this._genderCode = genderCode;
+  }
+  get name() {
+    return this._name;
+  }
+  get genderCode() {
+    return this._genderCode;
+  }
+}
+
+// 아래와 같이 수정 하면 모든 서브클래스가 사라지고 하나의 슈퍼클래스의 코드로 대체된다.
+function createPerson(aRecord) {
+  switch (aRecord.gender) {
+    case "M":
+      return new Person(aRecord.name, "M");
+    case "F":
+      return new Person(aRecord.name, "F");
+    default:
+      return new Person(aRecord.name, "X");
+  }
+}
+```
+
+## 12-8 슈퍼클래스 추출하기
+
+![inheritance](https://refactoring.com/rgrams/extractSuperclass.svg)
+
+### 배경
+
+두 클래스가 비슷한 일을 수행한다면 상속을 이용해 교집합이 되는 부분을 슈퍼클래스로 묶어 올리고, 두 서브클래스가 부모를 상속 받도록 설계를 고칠 수 있다.
+
+저자는 클래스가 만들어지고 상속으로 묶이는 과정을 너무 처음부터 완벽하게 설계하고 들어가려 할 필요 없다고 말한다.
+
+객체지향을 설명할 때 많은 책들이 현실 세계를 빗대어 설명하는 바람에 많은 개발자들이 처음부터 특정한 분류체계를 접근해야 할 것처럼 생각하는데, 그냥 만들면서 그저 자연스럽게 합치고 나누라고 조언한다.
+
+### 절차
+
+1. 빈 슈퍼클래스를 만든다. 원래의 클래스들이 새 클래스를 상속하도록 한다. 필요하다면 생성자에 함수 선언 바꾸기(6.5)를 적용한다.
+2. 테스트한다.
+3. 생성자 본문 올리기(12.3), 메서드 올리기(12.1), 필드 올리기(12.2)를 차례로 적용하여 공통 원소를 슈퍼클래스로 옮긴다.
+4. 서브클래스에 남은 메서드들을 검토한다. 공통되는 부분이 있다면 함수로 추출(6.1)한 다음 메서드 올리기(12.1)를 적용한다.
+5. 원래 클래스들을 사용하는 코드를 검토하여 슈퍼클래스의 인터베이스를 사용하게 할지 고민해본다.
+
+### 예시
+
+다음 두 클래스를 보자. 각 클래스의 동작을 보면 공통된 동작이 존재한다. 교집합이 되는 부분을 추출하면 서브클래스에 남는 부분은 각 클래스의 특징을 좀 더 명료하게 보여줄 수 있다.
+
+```js
+class Employee {
+  constructor(name, id, monthlyCost) {
+    this._id = id;
+    this._name = name;
+    this._monthlyCost = monthlyCost;
+  }
+  get monthlyCost() {
+    return this._monthlyCost;
+  }
+  get name() {
+    return this._name;
+  }
+  get id() {
+    return this._id;
+  }
+  get annualCost() {
+    return this.monthlyCost * 12;
+  }
+}
+
+class Department {
+  constructor(name, staff) {
+    this._name = name;
+    this._staff = staff;
+  }
+  get staff() {
+    this._staff.slice();
+  }
+  get name() {
+    return this._name;
+  }
+  get totalMonthlyCost() {
+    return this._staff
+      .map((e) => e.monthlyCost)
+      .reduce((sum, cost) => sum + cost);
+  }
+  get headCount() {
+    return this._staff.length;
+  }
+  get totalAnnualCost() {
+    return this.totalMonthlyCost * 12;
+  }
+}
+```
+
+우선 빈 클래스를 만들고, 각 클래스가 빈 클래스를 확장하도록 한다.
+
+```js
+class Party {}
+
+class Employee extends Party {
+  constructor(...) {
+    super()
+    ...
+  }
+  ...
+}
+
+class Department extends Party {
+  constructor(...) {
+    super()
+    ...
+  }
+  ...
+}
+```
+
+그 다음 데이터 부터 옮겨준다. 자바스크립트에서는 생성자에서 데이터를 초기화하므로 이 예제의 경우 `name` 속성 부터 차례로 이동시킨다.
+
+데이터를 다 옮긴 다음에는 메서드를 옮겨주는데, 이 과정에서 데이터와 메서드의 이름이 상이할 경우 이름도 함께 고쳐준다. 이 예제의 경우 `annualCost`, `monthlyCost`로 묶어줄 수 있다.
+
+```js
+class Party {
+  constructor(name) {
+    this._name = name;
+  }
+  get name() {
+    return this._name;
+  }
+  get annualCost() {
+    return this.monthlyCost * 12;
+  }
+}
+
+class Employee {
+  constructor(name, id, monthlyCost) {
+    super(name);
+    this._id = id;
+    this._monthlyCost = monthlyCost;
+  }
+  get monthlyCost() {
+    return this._monthlyCost;
+  }
+  get id() {
+    return this._id;
+  }
+}
+
+class Department {
+  constructor(name, staff) {
+    super(name);
+    this._staff = staff;
+  }
+  get staff() {
+    this._staff.slice();
+  }
+  get monthlyCost() {
+    return this._staff
+      .map((e) => e.monthlyCost)
+      .reduce((sum, cost) => sum + cost);
+  }
+  get headCount() {
+    return this._staff.length;
+  }
+}
+```
+
+## 12-9 계층 합치기
+
+![inheritance](https://refactoring.com/rgrams/collapseHierarchy.svg)
+
+### 배경
+
+부모 클래스와 자식 클래스로 나뉘게 된 건 그럴 만한 이유가 이유가 있었기 때문이다. 만약 그 이유가 사라졌다면 그냥 그 둘을 하나로 합친다.
+
+### 절차
+
+1. 두 클래스 중 제거할 것을 고른다. 미래를 생각하여 더 적합한 이름의 클래스를 남기고, 둘 다 적절치 않다면 임의로 하나를 고른다.
+2. 필드 올리기(12.2)와 메서드 올리기(12.1) 혹은 필드 내리기(12.5)와 메서드 내리기(12.4)를 적용하여 모든 요소를 하나의 클래스로 옮긴다.
+3. 제거할 클래스를 참조하던 모든 코드가 남겨질 클래스를 참조하도록 고친다.
+4. 빈 클래스를 제거한다.
+5. 테스트 한다.
+
+### 예시
+
+- N/A
+
+## 12-10 서브클래스를 위임으로 바꾸기
+
+![inheritance](https://refactoring.com/rgrams/replaceSubclassWithDelegate.svg)
+
+### 배경
+
+### 절차
+
+1. 생성자를 호출하는 곳이 많다면 생성자를 팩터리 함수로 바꾼다(11.8).
+2. 위임으로 활용할 빈 클래스를 만든다. 이 클래스의 생성자는 서브클래스에 특화된 데이터를 전부 받아야 하며, 보통은 슈퍼클래스를 가리키는 역참조도 필요하다.
+3. 위임을 저장할 필드를 슈퍼클래스에 추가한다.
+4. 서브클래스 생성 코드를 수정하여 위임 인스턴스를 생성하고 위임 필드에 대입해 초기화한다. 이 작업은 팩터리 함수가 수행하거나 생성자가 정확한 위임 인스턴스를 생성할 수 있는 게 확실하다면 생성자에서 수핸한다.
+5. 서브클래스의 메서드 중 위임 클래스로 이동할 것을 고른다.
+6. 함수 옮기기(8.1)를 적용해 위임 클래스로 옮긴다. 원래 메서드에서 위임하는 코드는 지우지 않는다.
+7. 서브클래스 외부에도 원래 메서드를 호출하는 코드가 있다면 서브클래스의 위임 코드를 슈퍼클래스로 옮긴다. 이때 위임이 존재하는지를 검사하는 보호 코드로 감싸야 한다. 호출하는 외부 코드가 없다면 원래 메서드는 죽은 코드가 되므로 제거한다(8.9).
+8. 테스트한다.
+9. 서브클래스의 모든 메서드가 옮겨질 때가지 5~8 과정을 반복한다.
+10. 스브클래스들의 생성자를 호출하는 코드를 찾아서 슈퍼클래스의 생성자를 사용하도록 수정한다.
+11. 테스트한다.
+12. 서브클래스를 삭제한다(죽은 코드 제거하기 8.9).
+
+### 예시
+
+#### 예시 1. 서브클래스가 하나일 때
+
+공연 예약 클래스(`Booking`)과 이를 상속하여 확장한 프리미엄 예약용 서비스(`PreminumBooking`)가 있다.
+
+```js
+class Booking {
+  constructor(show, date) {
+    this._show = show;
+    this._date = date;
+  }
+  hasTalkback() {
+    // 일반 예약에서는 관객과의 만남에 조건이 있음
+    return this._show.hasOwnProperty('talkback'); && !this.isPeakDay;
+  }
+  get basePrice() {
+    let result = this._show.price;
+    if (this.isPeakDay) result += Math.round(result * 0.15)
+    return result
+  }
+}
+
+class PreminumBooking {
+  constructor(show, date, extras) {
+    super(show, date);
+    this._extras = extras;
+  }
+  hasTalkback() {
+    // 프리미엄 예약에서는 관객과의 만남에 조건이 없음
+    return this._show.hasOwnProperty('talkback');
+  }
+  get basePrice() {
+    // 프리미엄 예약에서는 일반 예약의 가격을 호출한 것에 프리미엄 요금을 붙임
+    return Math.round(super.basePrice + this._extras.premiumFee);
+  }
+  get hasDinner() {
+    // 프리미엄 예약에는 일반 예약에 없는 기능이 있기도 함
+    return this._show.hasOwnProperty('dinner'); && !this.isPeakDay;
+  }
+}
+```
+
+코드 상 전혀 문제가 없지만 지금의 일반 / 프리미엄 예약이라는 기준이 아니라 다른 기준으로 분류 기준을 가져가야 한다면 위임으로 처리하는 것이 좋다. 상속은 단 한번만 사용할 수 있는 도구이기 때문이다. 다른 기준으로 분류하고 프리미엄 여부는 로직에서 동적으로 처리하게 하는 것이다.
+
+일반 예약과 프리미엄 예약을 사용하는 예제 코드를 위임으로 고쳐보자.
+
+```js
+aBooking = new Booking(show, date);
+aBooking = new PremiumBooking(show, date, extras);
+```
+
+가장 먼저 생성자를 팩터리 함수로 바꿔서 생성자 호출 부분을 캡슐화 한다.
+
+```js
+function createBooking(show, date) {
+  return new Booking(show, date);
+}
+function createPreminumBooking(show, date, extras) {
+  return new PreminumBooking(show, date, extras);
+}
+aBooking = createBooking(show, date);
+aBooking = createPreminumBooking(show, date, extras);
+```
+
+그 다음으로는 위임 클래스를 새로 만든다. 위임 클래스는 서브클래스가 사용하던 매개변수와 예약 객체로의 역참조(`this`)를 매개변수로 받는다. 여기서 역참조란 그냥 위임 클래스에서 슈퍼 클래스의 인스턴스라고 보아도 무방하다. 역참조가 필요한 이유는 서브클래스가 슈퍼클래스의 데이터에 접근해야 할 때가 있기 때문이다. 이제 상속을 사용하지 않도록 고칠 것이기 때문에 슈퍼클래스에 접근하려면 이런 기법을 사용해야 한다.
+
+점진적으로 `PreminumBooking`를 제거하고 `Booking` 내 위임 클래스에 접근하는 필드들을 통해 기능을 구현할 것이다.
+
+```js
+// 새로운 위임 클래스
+class PreminumBookingDelegate {
+  constructor(hostBooking, extras) {
+    this._host = hostBooking; // Booking의 this
+    this._extras = extras;
+  }
+  ...
+}
+
+// 팩터리 함수를 수정하여 새로운 위임을 예약 객체와 연결한다.
+function createPreminumBooking(show, date, extras) {
+  const result = new PreminumBooking(show, date, extras);
+  result._bePremium(extras);
+  return result;
+}
+
+class Booking {
+  ...
+  _bePremium(extras){
+    this._premiumDelegate  = new PreminumBookingDelegate(this, extras)
+  }
+}
+```
+
+구조가 갖춰졌으므로 이제 기능을 차례로 옮긴다. 기능이 잘 옮겨졌으면 서브클래스의 메서드를 삭제한다.
+
+```js
+class PreminumBookingDelegate {
+  ...
+  get hasTalkback() {
+    return this._host._show.hasOwnProperty("talkback");
+  }
+}
+
+class Booking {
+  ...
+  get hasTalkback() {
+    // 프리미엄에 관련한 위임이 클래스 내에 존재한다면 프리미엄 로직을 태우고, 그렇지 않으면 일반 로직을 태우는 분배 로직으로 수정한다.
+    return this._premiumDelegate
+      ? this._premiumDelegate.hasTalkback
+      : this._show.hasOwnProperty("talkback") && !this.isPeakDay;
+  }
+}
+```
+
+기본 가격을 계산하는 부분에서는 `super` 키워드를 사용하고 있으므로 유의해줘야 할 것이 있다. 상속이었을 때는 문제가 되지 않았지만, 위임으로 바꿨을 때는 무한 재귀의 위험이 있다. (Booking basePrice -> PreminumBookingDelegate basePrice -> (this.\_host.\_basePrice) -> Booking basePrice)
+
+저자는 이럴 때 위임의 메서드를 기반 메서드의 확장 형태로 재호출하라고 한다.
+
+```js
+class Booking {
+  ...
+  get basePrice() {
+    let result = this._show.price;
+    if (this.isPeakDay) result += Math.round(result * 0.15);
+    return this._premiumDelegate
+      ? this._premiumDelegate.extendBasePrice(result) // extends-
+      : result;
+  }
+}
+
+class PreminumBookingDelegate {
+  ...
+  extendBasePrice(base) {
+    return Math.round(base + this._extras.premiumFee)
+  }
+}
+```
+
+마지막으로 서브클래스에만 존재하는 메서드도 위임으로 옮기고, `Booking`에 분배 로직을 추가해서 마무리한다.
+
+```js
+class PreminumBookingDelegate {
+  get hasDinner() {
+    return this._extras.hasOwnProperty("dinner") && !this._host.isPeakDay;
+  }
+}
+
+class Booking {
+  ...
+  get hasDinner() {
+    return this._premiumDelegate
+      ? this._premiumDelegate.hasDinner
+      : undefined
+  }
+}
+```
+
+<!--
+#### 예시 2. 서브클래스가 여러 개일 때
+
+```js
+
+```
+
+```js
+
+``` -->
+
+## 12-11 슈퍼클래스를 위임으로 바꾸기
+
+![inheritance](https://refactoring.com/rgrams/replaceSuperclassWithDelegate.svg)
+
+### 배경
+
+앞서 저자가 상속을 '다름을 프로그래밍 하는 멋진 수단'이라고 소개했다고 언급했다. 하지만 상속을 잘못 사용하면 혼란과 복잡도를 키우는 주범이 되기도 한다.
+
+서브클래스는 인스턴스를 슈퍼클래스의 인스턴스로도 사용될 수 있어야 한다. 바꿔 말하면 슈퍼클래스(`Person`)이 쓰이는 자리에 서브클래스(`Male`)을 써도 잘 작동해야 한다는 뜻이다.
+
+무엇보다도 좋은 상속은 서브클래스가 슈퍼클래스의 모든 기능을 사용한다. 자식이 부모의 일부만 상속 받을 수는 없다. 만약 일부만 받아야 한다면 상속이 아니라 위임을 사용하는 것이 좋다는 신호다. 위임을 사용하면 기능의 일부만 빌려오도록 의도했음을 코드 레벨에서도 잘 드러낼 수 있다.
+
+상속이 최선이 아닌 상황이 된다면 과감하게 위임으로 바꿔보자.
+
+### 절차
+
+1. 슈퍼클래스 객체를 참조하는 필드를 서브클래스에 만든다(이번 리팩터링을 끝마치면 슈퍼클래스가 위임 객체가 될 것이므로 이 필드를 '위임 참조'라 부르자). 위임 참조를 새로운 슈퍼클래스 인스턴스로 초기화한다.
+2. 슈퍼클래스의 동작 각각에 대응하는 전달 함수를 서브클래스에 만든다(물론 위임 참조로 전달한다). 서로 관련된 함수끼리 그룹으로 묶어 진행하며, 그룹을 하나씩 만들 때마다 테스트한다.
+3. 슈퍼클래스의 동작 모두가 전달 함수로 오버라이드 되었다면 상속 관계를 끊는다.
+
+### 예시
+
+고대 문서를 보관하고 있는 도서관이 있고, 도서관은 각 문서들의 상세 정보를 `CatalogItem`이라는 클래스로 관리하고 있었다.
+
+```js
+class CatalogItem {
+  constructor(id, title, tags) {
+    this._id = id;
+    this._title = title;
+    this._tags = tags;
+  }
+  get id() {
+    return this._id;
+  }
+  get title() {
+    return this._title;
+  }
+  hasTag(arg) {
+    return this._tags.includes(arg);
+  }
+}
+```
+
+여기에 정기 세척 이력이 필요해서 `CatalogItem`을 확장한 `Scroll` 클래스를 만들었다.
+
+```js
+class Scroll extends CatalogItem {
+  constructor(id, title, tags, dateLastCleaned) {
+    super(id, title, tags);
+    this._dateLastCleaned = dateLastCleaned;
+  }
+  needsCleaning(targetDate) {
+    const threshold = this.hasTag("revered") ? 700 : 1500;
+    return this.daysSinceLastCleaning(targetDate) > threshold;
+  }
+  daysSinceLastCleaning(targetDate) {
+    return this._dateLastCleaned.until(targetDate, ChronoUnit.DAYS);
+  }
+}
+```
+
+하지만 이렇게 할 경우 물리적 대상과 논리적 대상이 달라질 수 있다. 하나의 문서에 대한 사본이 여러개 존재하는 등의 경우가 이에 속한다. 사본 중 하나의 내용이 변경된다면 나머지 사본과 구별할 수 있는 방법이 없다. 상속으로 해결하기 어려운 문제는 상속 관계를 끊고 이를 `위임`으로 바꿔볼 수 있다.
+
+가장 먼저 `Scroll`에 카탈로그 아이템을 참조하는 속성을 만들고 슈퍼클래스의 인스턴스를 하나 만든다. 그리고 이 인스턴스를 서브클래스의 필드로 넣어준다. 서브클래스의 메서드에서 슈퍼클래스의 기능을 사용하는 부분이 있다면 전부 이 인스턴스를 참조하도록 변경한다.
+
+모든 작업이 끝나면 마지막으로는 `extends` 키워드를 지워 상속 관계를 끊는다.
+
+```js
+class Scroll {
+  constructor(id, title, tags, dateLastCleaned) {
+    super(id, title, tags);
+    this._catalogItem = new CatalogItem(id, title, tags);
+    this._lastCleaned = dateLastCleaned;
+  }
+  get id() {
+    return this._catalogItem.id;
+  }
+  get title() {
+    return this._catalogItem.title;
+  }
+  hasTag(arg) {
+    return this._catalogItem.hasTag(arg);
+  }
+  needsCleaning(targetDate) {
+    const threshold = this.hasTag("revered") ? 700 : 1500;
+    return this.daysSinceLastCleaning(targetDate) > threshold;
+  }
+  daysSinceLastCleaning(targetDate) {
+    return this._dateLastCleaned.until(targetDate, ChronoUnit.DAYS);
+  }
+}
+```
